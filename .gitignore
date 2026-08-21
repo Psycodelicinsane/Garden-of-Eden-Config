@@ -1,0 +1,19 @@
+# Dependencias
+node_modules/
+
+# Build / exportación
+dist/
+*.zip
+
+# Logs
+*.log
+npm-debug.log*
+
+# Entorno
+.env
+.env.local
+.DS_Store
+
+# Editores
+.vscode/
+.idea/

@@ -16,4 +16,12 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  // Permite servir el preview de desarrollo bajo cualquier host (entornos de
+  // sandbox/preview). No afecta al build de producción.
+  server: {
+    allowedHosts: true,
+  },
+  preview: {
+    allowedHosts: true,
+  },
 });
