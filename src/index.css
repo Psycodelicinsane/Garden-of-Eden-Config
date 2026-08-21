@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: 'Courier New', Courier, monospace;
+  background: #000;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+canvas {
+  display: block;
+  cursor: crosshair;
+  /* PS2 pixel look — upscale with nearest neighbour */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
