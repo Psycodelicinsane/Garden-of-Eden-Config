@@ -1097,8 +1097,11 @@ export class GameEngine {
       const s = 0.75 + this.rand() * 0.85;
 
       if (isFruitTree) {
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.30 * s, 1.7 * s, 5), barkMat);
-        trunk.position.y = 0.85 * s;
+        // El tronco penetra ampliamente en la copa: así las caras angulosas del
+        // icosaedro no pueden dejar un hueco visible entre madera y follaje.
+        const trunkHeight = 2.35 * s;
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.30 * s, trunkHeight, 5), barkMat);
+        trunk.position.y = trunkHeight / 2;
         trunk.castShadow = true;
         tree.add(trunk);
 

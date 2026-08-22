@@ -206,25 +206,57 @@ export default function StartScreen({ onStart }: Props) {
             <span style={{ color: gold(0.5), fontSize: '0.7rem', textShadow: '0 0 8px rgba(255,200,110,0.5)' }}>✦</span>
           </div>
 
-          {/* Botón comenzar */}
+          {/* Botón principal al estilo de las pantallas de título clásicas */}
           <button
+            autoFocus
+            aria-label="Iniciar partida"
             onClick={onStart}
-            className="px-14 py-3.5 tracking-[0.4em] text-sm md:text-base font-mono uppercase
-                     active:scale-95 transition-all"
+            className="group relative min-w-[250px] overflow-hidden px-10 py-4
+                     active:scale-95 hover:scale-[1.035] focus-visible:scale-[1.035] transition-transform"
             style={{
-              color: '#241800',
+              color: '#f7d77e',
+              fontFamily: '"Courier New", Courier, monospace',
               fontWeight: 700,
-              background: 'linear-gradient(180deg, #ffe9a8 0%, #f5c34a 50%, #d99a1f 100%)',
-              border: '1px solid rgba(255,220,140,0.75)',
-              boxShadow: '0 0 22px rgba(255,190,80,0.45), inset 0 1px 0 rgba(255,255,255,0.6)',
-              textShadow: '0 1px 0 rgba(255,255,255,0.4)',
+              background: 'linear-gradient(180deg, rgba(25,21,10,0.9) 0%, rgba(6,9,5,0.94) 100%)',
+              border: '1px solid rgba(255,211,102,0.82)',
+              outline: '1px solid rgba(224,190,120,0.28)',
+              outlineOffset: 4,
+              boxShadow: 'inset 0 0 0 1px rgba(255,239,180,0.08), inset 0 8px 20px rgba(255,190,70,0.04), 0 0 24px rgba(255,190,80,0.28)',
+              textShadow: '0 0 8px rgba(255,198,79,0.62), 0 2px 2px #000',
               opacity: visible ? 1 : 0,
-              transition: 'opacity 1s ease 1.8s, transform 0.15s ease, box-shadow 0.25s ease',
-              animation: visible ? 'startBlink 2.4s ease-in-out 2.6s infinite' : 'none',
+              transition: 'opacity 1s ease 1.8s, transform 0.15s ease, filter 0.2s ease',
+              animation: visible ? 'startPulse 2.2s ease-in-out 2.6s infinite' : 'none',
             }}
           >
-            Comenzar
+            <span
+              aria-hidden
+              className="absolute inset-x-3 top-1 h-px"
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(255,220,130,0.38), transparent)' }}
+            />
+            <span className="flex items-center justify-center gap-4">
+              <span aria-hidden className="start-marker text-[10px]">◆</span>
+              <span className="text-sm md:text-base tracking-[0.28em] whitespace-nowrap">PRESS START</span>
+              <span aria-hidden className="start-marker text-[10px]">◆</span>
+            </span>
+            <span
+              aria-hidden
+              className="absolute inset-x-3 bottom-1 h-px"
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(255,220,130,0.2), transparent)' }}
+            />
           </button>
+
+          <p
+            aria-hidden
+            className="mt-3 text-[9px] tracking-[0.35em] font-mono"
+            style={{
+              color: gold(0.38),
+              textShadow: SERIF_SHADOW,
+              opacity: visible ? 1 : 0,
+              transition: 'opacity 1s ease 2.1s',
+            }}
+          >
+            ENTER / CLICK
+          </p>
 
           {registry.bestScore > 0 && (
             <p className="mt-4 text-[10px] font-mono tracking-[0.3em]"
@@ -411,9 +443,24 @@ export default function StartScreen({ onStart }: Props) {
       </div>
 
       <style>{`
-        @keyframes startBlink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.55; }
+        @keyframes startPulse {
+          0%, 100% {
+            box-shadow: inset 0 0 0 1px rgba(255,239,180,0.08), inset 0 8px 20px rgba(255,190,70,0.04), 0 0 18px rgba(255,190,80,0.2);
+            filter: brightness(0.94);
+          }
+          50% {
+            box-shadow: inset 0 0 0 1px rgba(255,239,180,0.14), inset 0 8px 22px rgba(255,190,70,0.08), 0 0 30px rgba(255,190,80,0.42);
+            filter: brightness(1.1);
+          }
+        }
+        @keyframes startMarkerBlink {
+          0%, 35%, 100% { opacity: 0.95; }
+          50%, 80% { opacity: 0.25; }
+        }
+        .start-marker {
+          animation: startMarkerBlink 1.1s steps(1, end) infinite;
+          color: #ffd166;
+          text-shadow: 0 0 9px rgba(255,198,79,0.8);
         }
       `}</style>
     </div>
