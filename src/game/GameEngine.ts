@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GameState } from '../App';
+import { emitScoreIfChanged } from './score';
 
 interface GameCallbacks {
   onStateChange: (state: GameState) => void;
@@ -465,6 +466,19 @@ export class GameEngine {
     this.setupEventListeners();
   }
 
+  /**
+   * Sincroniza el score visible con React únicamente cuando cambia su valor
+   * entero. Todas las mutaciones del score pasan por este método para evitar
+   * renders duplicados durante el sprint o una interacción.
+   */
+  private emitScoreIfChanged() {
+    this.lastSentScore = emitScoreIfChanged(
+      this.score,
+      this.lastSentScore,
+      this.callbacks.onScoreUpdate,
+    );
+  }
+
   init() {
     this.buildWorld();
     this.resize();
@@ -500,7 +514,7 @@ export class GameEngine {
       this.updateClouds(t);
       this.updateSky();
       this.renderer.render(this.scene, this.camera);
-      requestAnimationFrame(loop);
+      this.animationId = requestAnimationFrame(loop);
     };
     loop();
   }
@@ -617,7 +631,7 @@ export class GameEngine {
 
     this.discoverables.forEach(d => d.discovered = false);
 
-    this.callbacks.onScoreUpdate(0);
+    this.emitScoreIfChanged();
     this.callbacks.onDiscovery?.(0);
     this.callbacks.onFoodUpdate?.(0);
   }
@@ -658,12 +672,34 @@ export class GameEngine {
   }
 
   dispose() {
-    if (this.animationId) cancelAnimationFrame(this.animationId);
-    this.scene.traverse((o: THREE.Object3D) => {
-      if (o instanceof THREE.Mesh) {
-        o.geometry.dispose();
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        mats.forEach((m: THREE.Material) => m.dispose());
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+    this.removeEventListeners();
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock?.();
+
+    const disposedMaterials = new Set<THREE.Material>();
+    const disposedTextures = new Set<THREE.Texture>();
+    this.scene.traverse((object: THREE.Object3D) => {
+      const renderable = object as THREE.Object3D & {
+        geometry?: THREE.BufferGeometry;
+        material?: THREE.Material | THREE.Material[];
+      };
+      renderable.geometry?.dispose();
+      const materials = renderable.material
+        ? (Array.isArray(renderable.material) ? renderable.material : [renderable.material])
+        : [];
+      for (const material of materials) {
+        if (disposedMaterials.has(material)) continue;
+        for (const value of Object.values(material)) {
+          if (value instanceof THREE.Texture && !disposedTextures.has(value)) {
+            value.dispose();
+            disposedTextures.add(value);
+          }
+        }
+        material.dispose();
+        disposedMaterials.add(material);
       }
     });
     this.renderer.dispose();
@@ -2443,88 +2479,116 @@ export class GameEngine {
   // ═══════════════════════════════════════════════════════════════
 
   private mouseDown = false;
+
+  // Referencias estables para poder retirar todos los listeners en dispose().
+  // Esto es especialmente importante en React StrictMode, que monta y desmonta
+  // el motor dos veces durante el desarrollo.
+  private readonly handleKeyDown = (e: KeyboardEvent) => {
+    const k = e.key.toLowerCase();
+    this.keys[k] = true;
+    if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
+  };
+
+  private readonly handleKeyUp = (e: KeyboardEvent) => {
+    this.keys[e.key.toLowerCase()] = false;
+  };
+
+  private readonly handleMouseDown = () => {
+    this.mouseDown = true;
+    if (this.state === 'playing' && !('ontouchstart' in window)) {
+      if (document.pointerLockElement !== this.canvas) {
+        this.canvas.requestPointerLock?.();
+      }
+    }
+  };
+
+  private readonly handleMouseUp = () => {
+    this.mouseDown = false;
+  };
+
+  private readonly handleMouseMove = (e: MouseEvent) => {
+    if (this.state !== 'playing') return;
+    const locked = document.pointerLockElement === this.canvas;
+    if (locked || this.mouseDown) {
+      this.mouseMovement.x += e.movementX;
+      this.mouseMovement.y += e.movementY;
+    }
+  };
+
+  private readonly handleTouchStart = (e: TouchEvent) => {
+    for (const t of Array.from(e.changedTouches)) {
+      if (t.clientX < window.innerWidth / 2 && this.moveTouchId === null) {
+        this.moveTouchId = t.identifier;
+        this.touchStart = { x: t.clientX, y: t.clientY };
+        this.joystickActive = true;
+      } else if (this.lookTouchId === null) {
+        this.lookTouchId = t.identifier;
+        this.lastTouchX = t.clientX;
+        this.lastTouchY = t.clientY;
+      }
+    }
+  };
+
+  private readonly handleTouchMove = (e: TouchEvent) => {
+    for (const t of Array.from(e.changedTouches)) {
+      if (t.identifier === this.moveTouchId && this.touchStart) {
+        this.joystickDelta = {
+          x: Math.max(-1, Math.min(1, (t.clientX - this.touchStart.x) / 42)),
+          y: Math.max(-1, Math.min(1, (t.clientY - this.touchStart.y) / 42)),
+        };
+      } else if (t.identifier === this.lookTouchId) {
+        if (this.state === 'playing') {
+          this.playerRotation -= (t.clientX - this.lastTouchX) * 0.0052;
+          this.verticalRotation -= (t.clientY - this.lastTouchY) * 0.0052;
+          this.verticalRotation = Math.max(-1.3, Math.min(1.3, this.verticalRotation));
+        }
+        this.lastTouchX = t.clientX;
+        this.lastTouchY = t.clientY;
+      }
+    }
+    e.preventDefault();
+  };
+
+  private readonly handleTouchEnd = (e: TouchEvent) => {
+    for (const t of Array.from(e.changedTouches)) {
+      if (t.identifier === this.moveTouchId) {
+        this.moveTouchId = null;
+        this.joystickActive = false;
+        this.joystickDelta = { x: 0, y: 0 };
+        this.touchStart = null;
+      }
+      if (t.identifier === this.lookTouchId) {
+        this.lookTouchId = null;
+      }
+    }
+  };
+
+  private readonly handleResize = () => this.resize();
+
   private setupEventListeners() {
-    window.addEventListener('keydown', (e) => {
-      const k = e.key.toLowerCase();
-      this.keys[k] = true;
-      if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
-    });
-    window.addEventListener('keyup', (e) => {
-      this.keys[e.key.toLowerCase()] = false;
-    });
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+    this.canvas.addEventListener('mousedown', this.handleMouseDown);
+    window.addEventListener('mouseup', this.handleMouseUp);
+    window.addEventListener('mousemove', this.handleMouseMove);
+    this.canvas.addEventListener('touchstart', this.handleTouchStart, { passive: true });
+    this.canvas.addEventListener('touchmove', this.handleTouchMove, { passive: false });
+    this.canvas.addEventListener('touchend', this.handleTouchEnd);
+    this.canvas.addEventListener('touchcancel', this.handleTouchEnd);
+    window.addEventListener('resize', this.handleResize);
+  }
 
-    this.canvas.addEventListener('mousedown', () => {
-      this.mouseDown = true;
-      if (this.state === 'playing' && !('ontouchstart' in window)) {
-        if (document.pointerLockElement !== this.canvas) {
-          this.canvas.requestPointerLock?.();
-        }
-      }
-    });
-    window.addEventListener('mouseup', () => {
-      this.mouseDown = false;
-    });
-    window.addEventListener('mousemove', (e) => {
-      if (this.state !== 'playing') return;
-      const locked = document.pointerLockElement === this.canvas;
-      if (locked || this.mouseDown) {
-        this.mouseMovement.x += e.movementX;
-        this.mouseMovement.y += e.movementY;
-      }
-    });
-
-    // Táctil — mitad izquierda joystick, mitad derecha mirar
-    this.canvas.addEventListener('touchstart', (e) => {
-      for (const t of Array.from(e.changedTouches)) {
-        if (t.clientX < window.innerWidth / 2 && this.moveTouchId === null) {
-          this.moveTouchId = t.identifier;
-          this.touchStart = { x: t.clientX, y: t.clientY };
-          this.joystickActive = true;
-        } else if (this.lookTouchId === null) {
-          this.lookTouchId = t.identifier;
-          this.lastTouchX = t.clientX;
-          this.lastTouchY = t.clientY;
-        }
-      }
-    }, { passive: true });
-
-    this.canvas.addEventListener('touchmove', (e) => {
-      for (const t of Array.from(e.changedTouches)) {
-        if (t.identifier === this.moveTouchId && this.touchStart) {
-          this.joystickDelta = {
-            x: Math.max(-1, Math.min(1, (t.clientX - this.touchStart.x) / 42)),
-            y: Math.max(-1, Math.min(1, (t.clientY - this.touchStart.y) / 42)),
-          };
-        } else if (t.identifier === this.lookTouchId) {
-          if (this.state === 'playing') {
-            this.playerRotation -= (t.clientX - this.lastTouchX) * 0.0052;
-            this.verticalRotation -= (t.clientY - this.lastTouchY) * 0.0052;
-            this.verticalRotation = Math.max(-1.3, Math.min(1.3, this.verticalRotation));
-          }
-          this.lastTouchX = t.clientX;
-          this.lastTouchY = t.clientY;
-        }
-      }
-      e.preventDefault();
-    }, { passive: false });
-
-    const endTouch = (e: TouchEvent) => {
-      for (const t of Array.from(e.changedTouches)) {
-        if (t.identifier === this.moveTouchId) {
-          this.moveTouchId = null;
-          this.joystickActive = false;
-          this.joystickDelta = { x: 0, y: 0 };
-          this.touchStart = null;
-        }
-        if (t.identifier === this.lookTouchId) {
-          this.lookTouchId = null;
-        }
-      }
-    };
-    this.canvas.addEventListener('touchend', endTouch);
-    this.canvas.addEventListener('touchcancel', endTouch);
-
-    window.addEventListener('resize', () => this.resize());
+  private removeEventListeners() {
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+    this.canvas.removeEventListener('mousedown', this.handleMouseDown);
+    window.removeEventListener('mouseup', this.handleMouseUp);
+    window.removeEventListener('mousemove', this.handleMouseMove);
+    this.canvas.removeEventListener('touchstart', this.handleTouchStart);
+    this.canvas.removeEventListener('touchmove', this.handleTouchMove);
+    this.canvas.removeEventListener('touchend', this.handleTouchEnd);
+    this.canvas.removeEventListener('touchcancel', this.handleTouchEnd);
+    window.removeEventListener('resize', this.handleResize);
   }
 
   private resize() {
@@ -2788,11 +2852,7 @@ export class GameEngine {
     this.updateCamera(delta);
     this.checkDiscoveries();
     this.checkInspect();
-    const floorScore = Math.floor(this.score);
-    if (floorScore !== this.lastSentScore) {
-      this.lastSentScore = floorScore;
-      this.callbacks.onScoreUpdate(floorScore);
-    }
+    this.emitScoreIfChanged();
 
     // Regeneración muy lenta de frutos/bayas (tick barato, no cada frame por objeto)
     this.regenTick += delta;
@@ -2849,7 +2909,7 @@ export class GameEngine {
     this.food -= consumed;
     this.score += consumed; // 1 score por cada 1 saciedad consumida
     this.callbacks.onFoodUpdate?.(Math.max(0, Math.ceil(this.food)));
-    this.callbacks.onScoreUpdate(Math.floor(this.score));
+    this.emitScoreIfChanged();
   }
 
   private updateMovement(delta: number) {
@@ -3098,7 +3158,7 @@ export class GameEngine {
         if (!this.seenThoughts.has(idx + 100)) {
           this.seenThoughts.add(idx + 100);
           this.score += 1;
-          this.callbacks.onScoreUpdate(Math.floor(this.score));
+          this.emitScoreIfChanged();
         }
         return; // IMPORTANTE: No procesar el árbol
       }
@@ -3117,14 +3177,14 @@ export class GameEngine {
           if (!this.seenThoughts.has(idx)) {
             this.seenThoughts.add(idx);
             this.score += 1;
-            this.callbacks.onScoreUpdate(Math.floor(this.score));
+            this.emitScoreIfChanged();
             if (this.seenThoughts.size >= 21) {
               try {
                 const reg = JSON.parse(localStorage.getItem('edenRegistry') || '{}');
                 if (!reg.memoryDoubts) {
                   reg.memoryDoubts = true;
                   this.score += 21;
-                  this.callbacks.onScoreUpdate(Math.floor(this.score));
+                  this.emitScoreIfChanged();
                   localStorage.setItem('edenRegistry', JSON.stringify(reg));
                 }
               } catch { /* empty */ }
@@ -3147,7 +3207,7 @@ export class GameEngine {
           if (!this.seenThoughts.has(idx)) {
             this.seenThoughts.add(idx);
             this.score += 1;
-            this.callbacks.onScoreUpdate(Math.floor(this.score));
+            this.emitScoreIfChanged();
           }
         }
 
@@ -3158,7 +3218,7 @@ export class GameEngine {
             if (!reg.memoryMandate) {
               reg.memoryMandate = true;
               this.score += 21;
-              this.callbacks.onScoreUpdate(Math.floor(this.score));
+              this.emitScoreIfChanged();
             }
             localStorage.setItem('edenRegistry', JSON.stringify(reg));
           } catch { /* empty */ }

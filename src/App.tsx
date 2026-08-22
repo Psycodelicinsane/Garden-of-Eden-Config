@@ -28,8 +28,17 @@ export default function App() {
   const [adamThought, setAdamThought] = useState<{ text: string; key: number } | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem('edenHighScores');
-    if (saved) setHighScores(JSON.parse(saved));
+    try {
+      const saved = localStorage.getItem('edenHighScores');
+      if (!saved) return;
+      const parsed: unknown = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        setHighScores(parsed.filter((score): score is number => Number.isFinite(score)));
+      }
+    } catch {
+      // Un registro antiguo o corrupto no debe impedir que arranque el juego.
+      localStorage.removeItem('edenHighScores');
+    }
   }, []);
 
   useEffect(() => {
