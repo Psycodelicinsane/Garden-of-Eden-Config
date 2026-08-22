@@ -1085,9 +1085,9 @@ export class GameEngine {
       const tree = new THREE.Group();
       tree.position.set(x, y, z);
 
-      // Cada cuarto árbol es FRUTAL, repartidos por todo el jardín
-      // (antes solo 1 de cada 6 y cerca del centro).
-      const isFruitTree = placed % 4 === 0 && d < 420;
+      // Cada cuarto árbol es FRUTAL, sin limitarlo al centro: 60 de los 240
+      // árboles quedan repartidos por toda la extensión jugable del jardín.
+      const isFruitTree = placed % 4 === 0;
       const s = 0.75 + this.rand() * 0.85;
 
       if (isFruitTree) {

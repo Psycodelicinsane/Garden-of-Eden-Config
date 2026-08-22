@@ -21,7 +21,7 @@
 
 - Mundo 3D generado con Three.js.
 - Río serpenteante con cauce, orillas y corriente.
-- Bosque de 240 árboles, con árboles redondos, coníferas y frutales recolectables.
+- Bosque de 240 árboles, con 60 frutales recolectables repartidos por todo el jardín.
 - Árbol del Conocimiento con interacciones y cinemática propia.
 - Lilith como personaje dinámico, con animación, diálogo, colisiones y anatomía articulada.
 - Intro multicolor de PSYCODELICINSANE.
