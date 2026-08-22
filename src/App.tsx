@@ -4,13 +4,12 @@ import IntroSplash from './components/IntroSplash';
 import StartScreen from './components/StartScreen';
 import HUD from './components/HUD';
 import PauseMenu from './components/PauseMenu';
-import GameOverScreen from './components/GameOverScreen';
 import AwakeningTitle from './components/AwakeningTitle';
 import AdamThought from './components/AdamThought';
 import CinematicOverlay from './components/CinematicOverlay';
 import ForbiddenTreeCinematic from './components/ForbiddenTreeCinematic';
 
-export type GameState = 'start' | 'cinematic' | 'playing' | 'paused' | 'gameover';
+export type GameState = 'start' | 'cinematic' | 'playing' | 'paused';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,7 +21,6 @@ export default function App() {
   const [adminBootToGameplay, setAdminBootToGameplay] = useState(false);
   const [score, setScore] = useState(0);
   const [highScores, setHighScores] = useState<number[]>([]);
-  const [discoveryCount, setDiscoveryCount] = useState(0);
   const [foodCount, setFoodCount] = useState(0);
   const [cinematicProgress, setCinematicProgress] = useState(0);
   const [showAwakening, setShowAwakening] = useState(false);
@@ -47,7 +45,6 @@ export default function App() {
     const engine = new GameEngine(canvasRef.current, {
       onStateChange: setGameState,
       onScoreUpdate: setScore,
-      onDiscovery: setDiscoveryCount,
       onFoodUpdate: setFoodCount,
       onCinematicUpdate: setCinematicProgress,
       onForbiddenTree: () => setShowForbiddenTree(true),
@@ -84,15 +81,6 @@ export default function App() {
     gameEngineRef.current?.startGame();
   };
 
-  const handleRestart = () => {
-    setScore(0);
-    setDiscoveryCount(0);
-    setFoodCount(0);
-    setCinematicProgress(0);
-    gameEngineRef.current?.restart();
-    setGameState('cinematic');
-  };
-
   const handlePause = () => {
     if (gameState === 'playing') {
       setGameState('paused');
@@ -106,20 +94,6 @@ export default function App() {
       gameEngineRef.current?.resume();
     }
   };
-
-  const saveHighScore = (newScore: number) => {
-    const updated = [...highScores, newScore].sort((a, b) => b - a).slice(0, 10);
-    setHighScores(updated);
-    localStorage.setItem('edenHighScores', JSON.stringify(updated));
-  };
-
-  useEffect(() => {
-    if (gameState === 'gameover' && score > 0) {
-      saveHighScore(score);
-      gameEngineRef.current?.saveRegistry();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -226,7 +200,6 @@ export default function App() {
           gameEngineRef.current?.restart();
           setScore(0);
           setFoodCount(0);
-          setDiscoveryCount(0);
           setCinematicProgress(0);
           setAdminBootToGameplay(false);
           setShowForbiddenTree(false);
@@ -235,15 +208,6 @@ export default function App() {
           setShowIntro(true);
           setGameState('start');
         }} />
-      )}
-
-      {gameState === 'gameover' && (
-        <GameOverScreen
-          score={score}
-          discoveries={discoveryCount}
-          onRestart={handleRestart}
-          highScores={highScores}
-        />
       )}
     </div>
   );
