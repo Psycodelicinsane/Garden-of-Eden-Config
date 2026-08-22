@@ -4,25 +4,26 @@ import IntroSplash from './components/IntroSplash';
 import StartScreen from './components/StartScreen';
 import HUD from './components/HUD';
 import PauseMenu from './components/PauseMenu';
-import GameOverScreen from './components/GameOverScreen';
 import AwakeningTitle from './components/AwakeningTitle';
 import AdamThought from './components/AdamThought';
 import CinematicOverlay from './components/CinematicOverlay';
 import ForbiddenTreeCinematic from './components/ForbiddenTreeCinematic';
 
-export type GameState = 'start' | 'cinematic' | 'playing' | 'paused' | 'gameover';
+export type GameState = 'start' | 'cinematic' | 'playing' | 'paused';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameEngineRef = useRef<GameEngine>(null);
   const gameStateRef = useRef<GameState>('start');
   const showIntroRef = useRef(true);
+  const showForbiddenTreeRef = useRef(false);
+  const exploreHintStartedRef = useRef(false);
+  const exploreHintTimerRef = useRef<number | null>(null);
   const [gameState, setGameState] = useState<GameState>('start');
   const [showIntro, setShowIntro] = useState(true);
   const [adminBootToGameplay, setAdminBootToGameplay] = useState(false);
+  const [showExploreHint, setShowExploreHint] = useState(false);
   const [score, setScore] = useState(0);
-  const [highScores, setHighScores] = useState<number[]>([]);
-  const [discoveryCount, setDiscoveryCount] = useState(0);
   const [foodCount, setFoodCount] = useState(0);
   const [cinematicProgress, setCinematicProgress] = useState(0);
   const [showAwakening, setShowAwakening] = useState(false);
@@ -30,14 +31,39 @@ export default function App() {
   const [adamThought, setAdamThought] = useState<{ text: string; key: number } | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem('edenHighScores');
-    if (saved) setHighScores(JSON.parse(saved));
-  }, []);
-
-  useEffect(() => {
     gameStateRef.current = gameState;
     showIntroRef.current = showIntro;
-  }, [gameState, showIntro]);
+    showForbiddenTreeRef.current = showForbiddenTree;
+  }, [gameState, showIntro, showForbiddenTree]);
+
+  // La ayuda inicial debe verse una sola vez por partida y desaparecer a los
+  // siete segundos aunque el jugador siga con cero alimentos.
+  useEffect(() => {
+    if (gameState === 'start') {
+      if (exploreHintTimerRef.current !== null) {
+        window.clearTimeout(exploreHintTimerRef.current);
+        exploreHintTimerRef.current = null;
+      }
+      exploreHintStartedRef.current = false;
+      setShowExploreHint(false);
+      return;
+    }
+
+    if (gameState === 'playing' && !exploreHintStartedRef.current) {
+      exploreHintStartedRef.current = true;
+      setShowExploreHint(true);
+      exploreHintTimerRef.current = window.setTimeout(() => {
+        setShowExploreHint(false);
+        exploreHintTimerRef.current = null;
+      }, 7000);
+    }
+  }, [gameState]);
+
+  useEffect(() => () => {
+    if (exploreHintTimerRef.current !== null) {
+      window.clearTimeout(exploreHintTimerRef.current);
+    }
+  }, []);
 
   // Crear el motor UNA sola vez al montar.
   // Durante la intro solo carga el jardín en memoria; no arranca el loop del título aún.
@@ -47,10 +73,12 @@ export default function App() {
     const engine = new GameEngine(canvasRef.current, {
       onStateChange: setGameState,
       onScoreUpdate: setScore,
-      onDiscovery: setDiscoveryCount,
       onFoodUpdate: setFoodCount,
       onCinematicUpdate: setCinematicProgress,
-      onForbiddenTree: () => setShowForbiddenTree(true),
+      onForbiddenTree: () => {
+        showForbiddenTreeRef.current = true;
+        setShowForbiddenTree(true);
+      },
       onAdamThought: (text: string) => setAdamThought({ text, key: Date.now() }),
     });
 
@@ -84,15 +112,6 @@ export default function App() {
     gameEngineRef.current?.startGame();
   };
 
-  const handleRestart = () => {
-    setScore(0);
-    setDiscoveryCount(0);
-    setFoodCount(0);
-    setCinematicProgress(0);
-    gameEngineRef.current?.restart();
-    setGameState('cinematic');
-  };
-
   const handlePause = () => {
     if (gameState === 'playing') {
       setGameState('paused');
@@ -106,20 +125,6 @@ export default function App() {
       gameEngineRef.current?.resume();
     }
   };
-
-  const saveHighScore = (newScore: number) => {
-    const updated = [...highScores, newScore].sort((a, b) => b - a).slice(0, 10);
-    setHighScores(updated);
-    localStorage.setItem('edenHighScores', JSON.stringify(updated));
-  };
-
-  useEffect(() => {
-    if (gameState === 'gameover' && score > 0) {
-      saveHighScore(score);
-      gameEngineRef.current?.saveRegistry();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -135,9 +140,23 @@ export default function App() {
       }
 
       if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+
+        // Atajo temporal de administración: también cierra la cinemática del
+        // Árbol del Conocimiento si está activa.
+        if (showForbiddenTreeRef.current) {
+          showForbiddenTreeRef.current = false;
+          setShowForbiddenTree(false);
+          setShowAwakening(false);
+          gameEngineRef.current?.endForbiddenCinematic();
+          gameEngineRef.current?.resume();
+          return;
+        }
+
         if (introVisible || currentState === 'start' || currentState === 'cinematic') {
           setAdminBootToGameplay(true);
           setShowIntro(false);
+          setShowAwakening(false);
           setGameState('playing');
           setCinematicProgress(1);
           gameEngineRef.current?.skipCinematic();
@@ -186,6 +205,7 @@ export default function App() {
       <ForbiddenTreeCinematic
         show={showForbiddenTree}
         onEnd={() => {
+          showForbiddenTreeRef.current = false;
           setShowForbiddenTree(false);
           gameEngineRef.current?.endForbiddenCinematic();
           gameEngineRef.current?.resume();
@@ -205,7 +225,7 @@ export default function App() {
       )}
 
       {gameState === 'start' && !showIntro && (
-        <StartScreen onStart={handleStart} highScores={highScores} />
+        <StartScreen onStart={handleStart} />
       )}
 
       {(gameState === 'playing' || gameState === 'cinematic') && (
@@ -217,6 +237,7 @@ export default function App() {
           onJump={() => gameEngineRef.current?.triggerTouchJump()}
           onInspect={() => gameEngineRef.current?.triggerInspect()}
           showControls={gameState === 'playing'}
+          showExploreHint={showExploreHint}
         />
       )}
 
@@ -226,24 +247,15 @@ export default function App() {
           gameEngineRef.current?.restart();
           setScore(0);
           setFoodCount(0);
-          setDiscoveryCount(0);
           setCinematicProgress(0);
           setAdminBootToGameplay(false);
+          showForbiddenTreeRef.current = false;
           setShowForbiddenTree(false);
           setShowAwakening(false);
           setAdamThought(null);
           setShowIntro(true);
           setGameState('start');
         }} />
-      )}
-
-      {gameState === 'gameover' && (
-        <GameOverScreen
-          score={score}
-          discoveries={discoveryCount}
-          onRestart={handleRestart}
-          highScores={highScores}
-        />
       )}
     </div>
   );

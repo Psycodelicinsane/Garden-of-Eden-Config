@@ -1,10 +1,21 @@
 import * as THREE from 'three';
 import { GameState } from '../App';
+import { emitScoreIfChanged } from './score';
+import {
+  LILITH_SHOVE_DISTANCE_SQ,
+  chooseInteractionTarget,
+} from './interactionTarget';
+import {
+  RIVER_HALF_WIDTH,
+  isFruitTreeIndex,
+  isMountainCore,
+  mountainHeight,
+  riverCenterZ,
+} from './worldLayout';
 
 interface GameCallbacks {
   onStateChange: (state: GameState) => void;
   onScoreUpdate: (score: number) => void;
-  onDiscovery: (count: number) => void;
   onFoodUpdate?: (count: number) => void;
   onCinematicUpdate?: (progress: number) => void;
   onForbiddenTree?: () => void;
@@ -256,6 +267,9 @@ export class GameEngine {
   private readonly cameraSmoothness = 18; // Más suave
   private headBob = 0;
   private targetHeight = 0; // Suavizar subidas/bajadas de terreno
+  // Vectores reutilizados para evitar crear objetos durante gameplay.
+  private inputVector = new THREE.Vector3();
+  private inspectWorldPosition = new THREE.Vector3();
 
   private keys: Record<string, boolean> = {};
   private mouseMovement = { x: 0, y: 0 };
@@ -378,6 +392,7 @@ export class GameEngine {
   ];
 
   private score = 0;
+  private lastSentScore = -1;
   private discoveries = new Set<string>();
   private cinematicTime = 0;
   private cinematicDuration = 21;
@@ -462,6 +477,19 @@ export class GameEngine {
     this.setupEventListeners();
   }
 
+  /**
+   * Sincroniza el score visible con React únicamente cuando cambia su valor
+   * entero. Todas las mutaciones del score pasan por este método para evitar
+   * renders duplicados durante el sprint o una interacción.
+   */
+  private emitScoreIfChanged() {
+    this.lastSentScore = emitScoreIfChanged(
+      this.score,
+      this.lastSentScore,
+      this.callbacks.onScoreUpdate,
+    );
+  }
+
   init() {
     this.buildWorld();
     this.resize();
@@ -497,7 +525,7 @@ export class GameEngine {
       this.updateClouds(t);
       this.updateSky();
       this.renderer.render(this.scene, this.camera);
-      requestAnimationFrame(loop);
+      this.animationId = requestAnimationFrame(loop);
     };
     loop();
   }
@@ -541,6 +569,7 @@ export class GameEngine {
 
   restart() {
     this.score = 0;
+    this.lastSentScore = -1;
     this.food = 0;
     this.forbiddenTreeInspections = 0;
     this.forbiddenTreeTriggered = false;
@@ -613,8 +642,7 @@ export class GameEngine {
 
     this.discoverables.forEach(d => d.discovered = false);
 
-    this.callbacks.onScoreUpdate(0);
-    this.callbacks.onDiscovery(0);
+    this.emitScoreIfChanged();
     this.callbacks.onFoodUpdate?.(0);
   }
 
@@ -654,12 +682,34 @@ export class GameEngine {
   }
 
   dispose() {
-    if (this.animationId) cancelAnimationFrame(this.animationId);
-    this.scene.traverse((o: THREE.Object3D) => {
-      if (o instanceof THREE.Mesh) {
-        o.geometry.dispose();
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        mats.forEach((m: THREE.Material) => m.dispose());
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+    this.removeEventListeners();
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock?.();
+
+    const disposedMaterials = new Set<THREE.Material>();
+    const disposedTextures = new Set<THREE.Texture>();
+    this.scene.traverse((object: THREE.Object3D) => {
+      const renderable = object as THREE.Object3D & {
+        geometry?: THREE.BufferGeometry;
+        material?: THREE.Material | THREE.Material[];
+      };
+      renderable.geometry?.dispose();
+      const materials = renderable.material
+        ? (Array.isArray(renderable.material) ? renderable.material : [renderable.material])
+        : [];
+      for (const material of materials) {
+        if (disposedMaterials.has(material)) continue;
+        for (const value of Object.values(material)) {
+          if (value instanceof THREE.Texture && !disposedTextures.has(value)) {
+            value.dispose();
+            disposedTextures.add(value);
+          }
+        }
+        material.dispose();
+        disposedMaterials.add(material);
       }
     });
     this.renderer.dispose();
@@ -694,10 +744,14 @@ export class GameEngine {
   }
 
   // ═══ RÍO ═══
-  // Río recto y visible al norte del árbol central
-  private readonly riverZ = 35;        // posición Z fija del río
-  private readonly riverHalfWidth = 8; // ancho de la lámina de agua
-  private readonly riverBedDepth = 2.8; // profundidad del lecho
+  // El recorrido se define mediante puntos de control en worldLayout.ts para
+  // reproducir las grandes curvas del mapa ilustrado al norte del claro.
+  private readonly riverHalfWidth = RIVER_HALF_WIDTH;
+  private readonly riverBedDepth = 2.8;
+
+  private riverCenterZ(x: number) {
+    return riverCenterZ(x);
+  }
 
   // Terreno base SIN modificar por el río
   private getBaseTerrainHeight(x: number, z: number) {
@@ -711,11 +765,13 @@ export class GameEngine {
     h += this.sstep(150, 235, d) * 7;
     const far = this.sstep(260, 900, d);
     h += far * (26 + Math.sin(x * 0.006) * Math.cos(z * 0.005) * 14 + Math.sin(d * 0.012) * 9);
+    // Cumbres compactas en oeste, suroeste y sureste, como en el mapa.
+    h += mountainHeight(x, z);
     return h;
   }
 
   private riverSurface(x: number) {
-    const baseLevel = this.getBaseTerrainHeight(x, this.riverZ) - this.riverBedDepth;
+    const baseLevel = this.getBaseTerrainHeight(x, this.riverCenterZ(x)) - this.riverBedDepth;
     const tilt = -(x / 1300) * 0.8;
     return baseLevel + tilt + 2.2;
   }
@@ -737,7 +793,7 @@ export class GameEngine {
     this.createTerrain();
     this.createRiver();
     this.createAppleTree();
-    this.createForest(150);
+    this.createForest(240);
     this.createFlora();
     this.createDiscoverables();
     this.createButterflies(11);
@@ -856,8 +912,8 @@ export class GameEngine {
   getTerrainHeight(x: number, z: number) {
     let h = this.getBaseTerrainHeight(x, z);
 
-    // ─ RÍO RECTO ──
-    const rd = Math.abs(z - this.riverZ);
+    // ─ RÍO SERPENTEANTE ──
+    const rd = Math.abs(z - this.riverCenterZ(x));
     if (rd < 35) {
       const waterY = this.riverSurface(x);
       const bankH = waterY + 0.6;
@@ -903,7 +959,8 @@ export class GameEngine {
     const half = this.riverHalfWidth;
     for (let x = -1300; x <= 1300; x += 4) {
       const y = this.riverSurface(x);
-      verts.push(x, y, this.riverZ - half, x, y, this.riverZ + half);
+      const cz = this.riverCenterZ(x);
+      verts.push(x, y, cz - half, x, y, cz + half);
       uvs.push(x * 0.05, 0, x * 0.05, 1);
       if (row > 0) {
         const a = (row - 1) * 2;
@@ -1022,26 +1079,33 @@ export class GameEngine {
 
     let placed = 0;
     let guard = 0;
-    while (placed < count && guard < count * 10) {
+    while (placed < count && guard < count * 30) {
       guard++;
+      const isFruitTree = isFruitTreeIndex(placed);
       const x = this.rand() * 840 - 420;
       const z = this.rand() * 840 - 420;
       const d = Math.sqrt(x * x + z * z);
-      // Respetar el claro del árbol prohibido y el cauce del río
-      if (d < 16) continue;
-      if (Math.abs(z - this.riverZ) < 20) continue;
+
+      // El bosque denso forma un cinturón exterior. Los frutales sí aparecen
+      // dentro del jardín, pero dejan libre el claro del Árbol del Conocimiento.
+      if (d < (isFruitTree ? 42 : 190)) continue;
+      if (Math.abs(z - this.riverCenterZ(x)) < 28) continue;
+      // Las cumbres quedan despejadas para que las montañas se lean a distancia.
+      if (isMountainCore(x, z)) continue;
 
       const y = this.getTerrainHeight(x, z);
       const tree = new THREE.Group();
       tree.position.set(x, y, z);
 
-      // Cada sexto árbol es FRUTAL: copa distinta, más redonda y clara
-      const isFruitTree = placed % 6 === 0 && d < 200;
+      // Cada cuarto árbol es frutal: 60 de los 240 árboles totales.
       const s = 0.75 + this.rand() * 0.85;
 
       if (isFruitTree) {
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.30 * s, 1.7 * s, 5), barkMat);
-        trunk.position.y = 0.85 * s;
+        // El tronco penetra ampliamente en la copa: así las caras angulosas del
+        // icosaedro no pueden dejar un hueco visible entre madera y follaje.
+        const trunkHeight = 2.35 * s;
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.30 * s, trunkHeight, 5), barkMat);
+        trunk.position.y = trunkHeight / 2;
         trunk.castShadow = true;
         tree.add(trunk);
 
@@ -1073,8 +1137,8 @@ export class GameEngine {
           tree.add(fr);
         }
         this.harvestables.push(tree);
-      } else if (this.rand() > 0.45) {
-        // Árbol redondo
+      } else if (this.rand() > 0.25) {
+        // Árbol redondo (más abundante, como en el mapa de la imagen)
         const nBlobs = 2 + Math.floor(this.rand() * 2);
         const trunkH = (2.4 + this.rand() * 1.1) * s;
         const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * s, 0.38 * s, trunkH, 6), barkMat);
@@ -1124,7 +1188,7 @@ export class GameEngine {
     for (let i = 0; i < 660; i++) {
       const x = this.rand() * 700 - 350;
       const z = this.rand() * 700 - 350;
-      if (Math.abs(z - this.riverZ) < 18) continue;
+      if (Math.abs(z - this.riverCenterZ(x)) < 18) continue;
       const tuft = new THREE.Group();
       const b1 = new THREE.Mesh(bladeGeo, bladeMat);
       const b2 = new THREE.Mesh(bladeGeo, bladeMat);
@@ -1141,7 +1205,7 @@ export class GameEngine {
     for (let i = 0; i < 70; i++) {
       const x = this.rand() * 360 - 180;
       const z = this.rand() * 360 - 180;
-      if (Math.abs(z - this.riverZ) < 18) continue;
+      if (Math.abs(z - this.riverCenterZ(x)) < 18) continue;
       const y = this.getTerrainHeight(x, z);
       const f = new THREE.Group();
       const stem = new THREE.Mesh(
@@ -1169,7 +1233,7 @@ export class GameEngine {
       const z = this.rand() * 420 - 210;
       const d = Math.sqrt(x * x + z * z);
       if (d < 12) continue;
-      if (Math.abs(z - this.riverZ) < 18) continue;
+      if (Math.abs(z - this.riverCenterZ(x)) < 18) continue;
       const y = this.getTerrainHeight(x, z);
 
       const bush = new THREE.Group();
@@ -1225,7 +1289,7 @@ export class GameEngine {
       const x = this.rand() * 640 - 320;
       const z = this.rand() * 640 - 320;
       if (Math.sqrt(x * x + z * z) < 14) continue;
-      const rd = Math.abs(z - this.riverZ);
+      const rd = Math.abs(z - this.riverCenterZ(x));
       if (rd < 18) continue;
       const r = 0.4 + this.rand() * 0.75;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), rockMat);
@@ -1584,8 +1648,8 @@ export class GameEngine {
       [0.148, 0.390],   // pecho
       [0.144, 0.430],
       [0.120, 0.480],   // hombros
-      [0.085, 0.520],
-      [0.050, 0.550],   // base cuello (torso más corto: 0.55 < 0.67)
+      [0.088, 0.520],
+      [0.066, 0.555],   // base cuello, más ancha para fundirse con el cuello
     ], SEG, skinMat);
     torso.scale.set(1.02, 1, 0.72); // Más plano frontalmente
     chest.add(torso);
@@ -1668,30 +1732,32 @@ export class GameEngine {
     // (Eliminadas las esferas 'shoulder' y 'shoulderTop' externas que causaban bultos irreales.
     // El hombro ahora se define por el nacimiento del brazo en mkArm.)
 
-    // ── CUELLO ── reposicionado
+    // ── CUELLO ── esbelto, encajado a ras con la abertura del torso ──
     const neck = this.lathe([
-      [0.052, -0.015],
-      [0.044, 0.010],
-      [0.038, 0.040],
-      [0.037, 0.065],
-      [0.042, 0.088],
-    ], 14, skinMat);
-    neck.position.set(0, 0.535, 0.004); // bajado de 0.650 a 0.535
-    neck.scale.set(1, 1, 0.88);
+      [0.066, -0.006],  // base a ras: mismo radio que la abertura del torso
+      [0.052, 0.020],
+      [0.042, 0.055],
+      [0.039, 0.090],   // garganta esbelta
+      [0.040, 0.125],
+      [0.043, 0.158],   // se ensancha hacia la mandíbula
+    ], 20, skinMat);
+    neck.position.set(0, 0.555, 0.006);
+    neck.scale.set(1, 1, 0.86);
     chest.add(neck);
 
-    // Trapecios suaves
+    // Trapecios — pendiente suave que une el cuello con el hombro
     for (const ts of [-1, 1]) {
-      const trap = new THREE.Mesh(new THREE.SphereGeometry(0.038, 12, 9), skinMat);
-      trap.position.set(0.040 * ts, 0.505, -0.015);
-      trap.scale.set(1.15, 0.50, 0.80);
-      trap.rotation.z = -0.16 * ts;
+      const trap = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 9), skinMat);
+      trap.position.set(0.055 * ts, 0.515, -0.014);
+      trap.scale.set(1.45, 0.52, 0.85);
+      trap.rotation.z = -0.22 * ts;
       chest.add(trap);
     }
 
     // ── CABEZA ── grupo propio para poder girarla y asentirla
+    // Subida para dejar el cuello visible entre los hombros y la mandíbula.
     const headG = new THREE.Group();
-    headG.position.set(0, 0.635, 0.006);
+    headG.position.set(0, 0.760, 0.006);
     chest.add(headG);
     this.lilithHead = headG;
 
@@ -1713,13 +1779,13 @@ export class GameEngine {
     chin.scale.set(1.0, 0.75, 0.85);
     headG.add(chin);
 
-    // ── ROSTRO ── ojos negros
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x14100e });
+    // ── ROSTRO ── dos ojitos negros, bien visibles bajo el flequillo
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0c0a08 });
     for (const es of [-1, 1]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.0175, 12, 9), eyeMat);
-      eye.position.set(0.041 * es, 0.008, 0.094);
-      eye.scale.set(1.25, 0.92, 0.5);
-      eye.rotation.z = -0.16 * es;
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.015, 12, 9), eyeMat);
+      eye.position.set(0.040 * es, -0.030, 0.098);
+      eye.scale.set(1.1, 0.9, 0.55);
+      eye.rotation.z = -0.14 * es;
       headG.add(eye);
 
       // Oreja
@@ -1736,13 +1802,13 @@ export class GameEngine {
     this.lilithHair = hair;
     this.lilithHair.name = 'lilith-hair';
 
-    // ── 1. CUERO CABELLUDO ──
+    // ── 1. CUERO CABELLUDO ── casquete que cubre casi toda la cabeza
     const scalp = new THREE.Mesh(
-      new THREE.SphereGeometry(0.121, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.42),
+      new THREE.SphereGeometry(0.124, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.58),
       hairMat,
     );
-    scalp.position.set(0, 0.006, -0.006);
-    scalp.scale.set(1.0, 1.14, 1.02);
+    scalp.position.set(0, 0.004, -0.006);
+    scalp.scale.set(1.0, 1.12, 1.04);
     scalp.castShadow = true;
     hair.add(scalp);
 
@@ -1770,19 +1836,33 @@ export class GameEngine {
       hair.add(sideVolume);
     }
 
-    const nape = new THREE.Mesh(new THREE.SphereGeometry(0.084, 14, 11), hairMat);
-    nape.position.set(0, -0.088, -0.072);
-    nape.scale.set(1.06, 1.0, 0.86);
+    const nape = new THREE.Mesh(new THREE.SphereGeometry(0.092, 14, 11), hairMat);
+    nape.position.set(0, -0.075, -0.085);
+    nape.scale.set(1.15, 1.1, 0.95);
     nape.castShadow = true;
     hair.add(nape);
+
+    // ── MASA POSTERIOR ── une el cráneo con la melena que cae: sin huecos.
+    // Una cascada continua de pelo que arranca en la nuca y llega a los hombros.
+    const backMass = new THREE.Mesh(new THREE.SphereGeometry(0.135, 18, 14), hairMat);
+    backMass.position.set(0, -0.16, -0.085);
+    backMass.scale.set(0.95, 1.55, 0.85);
+    backMass.castShadow = true;
+    hair.add(backMass);
+
+    const backTail = new THREE.Mesh(new THREE.SphereGeometry(0.115, 16, 12), hairMat);
+    backTail.position.set(0, -0.34, -0.055);
+    backTail.scale.set(0.8, 1.2, 0.6);
+    backTail.castShadow = true;
+    hair.add(backTail);
 
     // ── FLEQUILLO ──
     const fringeMass = new THREE.Mesh(
       new THREE.SphereGeometry(0.116, 22, 14, Math.PI * 0.65, Math.PI * 0.70, 0, Math.PI * 0.45),
       hairMat,
     );
-    fringeMass.position.set(0, 0.032, 0.005);
-    fringeMass.scale.set(1.0, 0.92, 1.03);
+    fringeMass.position.set(0, 0.040, 0.006);
+    fringeMass.scale.set(1.0, 0.88, 1.03);
     fringeMass.castShadow = true;
     hair.add(fringeMass);
 
@@ -1950,51 +2030,97 @@ export class GameEngine {
       thenar.scale.set(0.9, 1.25, 0.75);
       wrist.add(thenar);
 
-      // ── DEDOS EN DOS FALANGES ── con nudillo y curvatura natural
+      // ── DEDOS ── tres falanges por dedo, nudillos y uña ──
+      // Longitudes y radios decrecientes; el corazón es el más largo,
+      // el meñique el más corto y fino. La mano queda relajada y natural.
+      const nailMat = new THREE.MeshLambertMaterial({ color: 0xf6e4d7, flatShading: false });
       const FINGERS = [
-        { len1: 0.024, len2: 0.019, r: 0.0060 }, // índice
-        { len1: 0.027, len2: 0.021, r: 0.0062 }, // corazón
-        { len1: 0.025, len2: 0.019, r: 0.0058 }, // anular
-        { len1: 0.019, len2: 0.015, r: 0.0052 }, // meñique
+        { l1: 0.021, l2: 0.014, l3: 0.010, r1: 0.0060, r2: 0.0050, r3: 0.0040 }, // índice
+        { l1: 0.024, l2: 0.016, l3: 0.011, r1: 0.0062, r2: 0.0052, r3: 0.0042 }, // corazón
+        { l1: 0.022, l2: 0.014, l3: 0.010, r1: 0.0058, r2: 0.0048, r3: 0.0039 }, // anular
+        { l1: 0.017, l2: 0.011, l3: 0.008, r1: 0.0050, r2: 0.0042, r3: 0.0035 }, // meñique
       ];
       FINGERS.forEach((fg, f) => {
         // Los dedos nacen en un arco, no en línea recta
-        const spread = (f - 1.5) * 0.0128;
-        const knuckleY = -0.056 - Math.cos((f - 1.5) * 0.55) * 0.004;
+        const spread = (f - 1.5) * 0.0135;
+        const baseY = -0.055 - Math.cos((f - 1.5) * 0.55) * 0.005;
+        const zFwd = 0.004;
 
-        // Nudillo
-        const knuckle = new THREE.Mesh(new THREE.SphereGeometry(fg.r * 1.15, 8, 6), skinMat);
-        knuckle.position.set(spread, knuckleY, 0.001);
-        wrist.add(knuckle);
+        // Nudillo base (MCP)
+        const mcp = new THREE.Mesh(new THREE.SphereGeometry(fg.r1 * 1.3, 8, 6), skinMat);
+        mcp.position.set(spread, baseY, zFwd);
+        mcp.scale.set(1, 0.85, 0.95);
+        wrist.add(mcp);
 
-        // Falange proximal, ligeramente flexionada
-        const p1 = new THREE.Mesh(new THREE.CapsuleGeometry(fg.r, fg.len1, 5, 7), skinMat);
-        p1.position.set(spread, knuckleY - fg.len1 * 0.5 - 0.004, 0.0035);
-        p1.rotation.x = 0.14;
-        p1.rotation.z = -spread * 1.6;
-        wrist.add(p1);
+        const segs = [
+          { len: fg.l1, r: fg.r1, rx: 0.10 },
+          { len: fg.l2, r: fg.r2, rx: 0.22 },
+          { len: fg.l3, r: fg.r3, rx: 0.36 },
+        ];
+        let jy = baseY;
+        let jz = zFwd;
+        for (let s = 0; s < segs.length; s++) {
+          const seg = segs[s];
+          const bone = new THREE.Mesh(new THREE.CapsuleGeometry(seg.r, seg.len, 5, 8), skinMat);
+          bone.position.set(spread, jy - seg.len * 0.5, jz + 0.0012);
+          bone.rotation.x = seg.rx;
+          bone.rotation.z = -spread * 1.5;
+          wrist.add(bone);
 
-        // Falange distal, más curvada: la mano queda relajada
-        const tipY = knuckleY - fg.len1 - 0.010;
-        const p2 = new THREE.Mesh(new THREE.CapsuleGeometry(fg.r * 0.85, fg.len2, 5, 7), skinMat);
-        p2.position.set(spread * 1.06, tipY - fg.len2 * 0.5, 0.0105);
-        p2.rotation.x = 0.34;
-        p2.rotation.z = -spread * 1.6;
-        wrist.add(p2);
+          // Extremo distal de esta falange (siguiente articulación)
+          jy -= seg.len;
+          jz += 0.0012;
+
+          // Nudillos intermedios (PIP y DIP)
+          if (s < segs.length - 1) {
+            const joint = new THREE.Mesh(new THREE.SphereGeometry(seg.r * 1.05, 8, 6), skinMat);
+            joint.position.set(spread, jy, jz);
+            joint.scale.set(1, 0.9, 0.95);
+            wrist.add(joint);
+          }
+        }
+
+        // Uña en la punta
+        const nail = new THREE.Mesh(new THREE.SphereGeometry(fg.r3 * 0.85, 6, 5), nailMat);
+        nail.position.set(spread, jy - fg.r3 * 0.2, jz + fg.r3 * 0.6);
+        nail.scale.set(0.85, 1.15, 0.35);
+        nail.rotation.x = -0.5;
+        wrist.add(nail);
       });
 
-      // ── PULGAR ── opuesto, en dos piezas
-      const thumb1 = new THREE.Mesh(new THREE.CapsuleGeometry(0.0072, 0.022, 5, 7), skinMat);
-      thumb1.position.set(0.023 * -side, -0.042, 0.010);
-      thumb1.rotation.z = 0.82 * side;
-      thumb1.rotation.x = -0.30;
-      wrist.add(thumb1);
+      // ── PULGAR ── tres segmentos, opuesto al resto de la mano ──
+      // Trapecio (base del pulgar)
+      const trap = new THREE.Mesh(new THREE.SphereGeometry(0.0080, 8, 6), skinMat);
+      trap.position.set(0.021 * -side, -0.038, 0.008);
+      trap.scale.set(1.1, 0.9, 0.95);
+      wrist.add(trap);
 
-      const thumb2 = new THREE.Mesh(new THREE.CapsuleGeometry(0.0062, 0.018, 5, 7), skinMat);
-      thumb2.position.set(0.032 * -side, -0.060, 0.017);
-      thumb2.rotation.z = 0.62 * side;
-      thumb2.rotation.x = -0.42;
-      wrist.add(thumb2);
+      // Metacarpo
+      const tmc = new THREE.Mesh(new THREE.CapsuleGeometry(0.0072, 0.015, 5, 7), skinMat);
+      tmc.position.set(0.026 * -side, -0.049, 0.011);
+      tmc.rotation.z = 0.85 * side;
+      tmc.rotation.x = -0.18;
+      wrist.add(tmc);
+
+      // Falange proximal
+      const tpr = new THREE.Mesh(new THREE.CapsuleGeometry(0.0064, 0.013, 5, 7), skinMat);
+      tpr.position.set(0.033 * -side, -0.061, 0.017);
+      tpr.rotation.z = 0.70 * side;
+      tpr.rotation.x = -0.32;
+      wrist.add(tpr);
+
+      // Falange distal
+      const tdi = new THREE.Mesh(new THREE.CapsuleGeometry(0.0056, 0.010, 5, 7), skinMat);
+      tdi.position.set(0.038 * -side, -0.071, 0.023);
+      tdi.rotation.z = 0.55 * side;
+      tdi.rotation.x = -0.5;
+      wrist.add(tdi);
+
+      // Uña del pulgar
+      const tnail = new THREE.Mesh(new THREE.SphereGeometry(0.0046, 6, 5), nailMat);
+      tnail.position.set(0.040 * -side, -0.074, 0.027);
+      tnail.scale.set(0.8, 1.1, 0.35);
+      wrist.add(tnail);
 
       chest.add(arm);
       if (side < 0) this.lilithElbowL = elbow;
@@ -2366,88 +2492,116 @@ export class GameEngine {
   // ═══════════════════════════════════════════════════════════════
 
   private mouseDown = false;
+
+  // Referencias estables para poder retirar todos los listeners en dispose().
+  // Esto es especialmente importante en React StrictMode, que monta y desmonta
+  // el motor dos veces durante el desarrollo.
+  private readonly handleKeyDown = (e: KeyboardEvent) => {
+    const k = e.key.toLowerCase();
+    this.keys[k] = true;
+    if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
+  };
+
+  private readonly handleKeyUp = (e: KeyboardEvent) => {
+    this.keys[e.key.toLowerCase()] = false;
+  };
+
+  private readonly handleMouseDown = () => {
+    this.mouseDown = true;
+    if (this.state === 'playing' && !('ontouchstart' in window)) {
+      if (document.pointerLockElement !== this.canvas) {
+        this.canvas.requestPointerLock?.();
+      }
+    }
+  };
+
+  private readonly handleMouseUp = () => {
+    this.mouseDown = false;
+  };
+
+  private readonly handleMouseMove = (e: MouseEvent) => {
+    if (this.state !== 'playing') return;
+    const locked = document.pointerLockElement === this.canvas;
+    if (locked || this.mouseDown) {
+      this.mouseMovement.x += e.movementX;
+      this.mouseMovement.y += e.movementY;
+    }
+  };
+
+  private readonly handleTouchStart = (e: TouchEvent) => {
+    for (const t of Array.from(e.changedTouches)) {
+      if (t.clientX < window.innerWidth / 2 && this.moveTouchId === null) {
+        this.moveTouchId = t.identifier;
+        this.touchStart = { x: t.clientX, y: t.clientY };
+        this.joystickActive = true;
+      } else if (this.lookTouchId === null) {
+        this.lookTouchId = t.identifier;
+        this.lastTouchX = t.clientX;
+        this.lastTouchY = t.clientY;
+      }
+    }
+  };
+
+  private readonly handleTouchMove = (e: TouchEvent) => {
+    for (const t of Array.from(e.changedTouches)) {
+      if (t.identifier === this.moveTouchId && this.touchStart) {
+        this.joystickDelta = {
+          x: Math.max(-1, Math.min(1, (t.clientX - this.touchStart.x) / 42)),
+          y: Math.max(-1, Math.min(1, (t.clientY - this.touchStart.y) / 42)),
+        };
+      } else if (t.identifier === this.lookTouchId) {
+        if (this.state === 'playing') {
+          this.playerRotation -= (t.clientX - this.lastTouchX) * 0.0052;
+          this.verticalRotation -= (t.clientY - this.lastTouchY) * 0.0052;
+          this.verticalRotation = Math.max(-1.3, Math.min(1.3, this.verticalRotation));
+        }
+        this.lastTouchX = t.clientX;
+        this.lastTouchY = t.clientY;
+      }
+    }
+    e.preventDefault();
+  };
+
+  private readonly handleTouchEnd = (e: TouchEvent) => {
+    for (const t of Array.from(e.changedTouches)) {
+      if (t.identifier === this.moveTouchId) {
+        this.moveTouchId = null;
+        this.joystickActive = false;
+        this.joystickDelta = { x: 0, y: 0 };
+        this.touchStart = null;
+      }
+      if (t.identifier === this.lookTouchId) {
+        this.lookTouchId = null;
+      }
+    }
+  };
+
+  private readonly handleResize = () => this.resize();
+
   private setupEventListeners() {
-    window.addEventListener('keydown', (e) => {
-      const k = e.key.toLowerCase();
-      this.keys[k] = true;
-      if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
-    });
-    window.addEventListener('keyup', (e) => {
-      this.keys[e.key.toLowerCase()] = false;
-    });
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+    this.canvas.addEventListener('mousedown', this.handleMouseDown);
+    window.addEventListener('mouseup', this.handleMouseUp);
+    window.addEventListener('mousemove', this.handleMouseMove);
+    this.canvas.addEventListener('touchstart', this.handleTouchStart, { passive: true });
+    this.canvas.addEventListener('touchmove', this.handleTouchMove, { passive: false });
+    this.canvas.addEventListener('touchend', this.handleTouchEnd);
+    this.canvas.addEventListener('touchcancel', this.handleTouchEnd);
+    window.addEventListener('resize', this.handleResize);
+  }
 
-    this.canvas.addEventListener('mousedown', () => {
-      this.mouseDown = true;
-      if (this.state === 'playing' && !('ontouchstart' in window)) {
-        if (document.pointerLockElement !== this.canvas) {
-          this.canvas.requestPointerLock?.();
-        }
-      }
-    });
-    window.addEventListener('mouseup', () => {
-      this.mouseDown = false;
-    });
-    window.addEventListener('mousemove', (e) => {
-      if (this.state !== 'playing') return;
-      const locked = document.pointerLockElement === this.canvas;
-      if (locked || this.mouseDown) {
-        this.mouseMovement.x += e.movementX;
-        this.mouseMovement.y += e.movementY;
-      }
-    });
-
-    // Táctil — mitad izquierda joystick, mitad derecha mirar
-    this.canvas.addEventListener('touchstart', (e) => {
-      for (const t of Array.from(e.changedTouches)) {
-        if (t.clientX < window.innerWidth / 2 && this.moveTouchId === null) {
-          this.moveTouchId = t.identifier;
-          this.touchStart = { x: t.clientX, y: t.clientY };
-          this.joystickActive = true;
-        } else if (this.lookTouchId === null) {
-          this.lookTouchId = t.identifier;
-          this.lastTouchX = t.clientX;
-          this.lastTouchY = t.clientY;
-        }
-      }
-    }, { passive: true });
-
-    this.canvas.addEventListener('touchmove', (e) => {
-      for (const t of Array.from(e.changedTouches)) {
-        if (t.identifier === this.moveTouchId && this.touchStart) {
-          this.joystickDelta = {
-            x: Math.max(-1, Math.min(1, (t.clientX - this.touchStart.x) / 42)),
-            y: Math.max(-1, Math.min(1, (t.clientY - this.touchStart.y) / 42)),
-          };
-        } else if (t.identifier === this.lookTouchId) {
-          if (this.state === 'playing') {
-            this.playerRotation -= (t.clientX - this.lastTouchX) * 0.0052;
-            this.verticalRotation -= (t.clientY - this.lastTouchY) * 0.0052;
-            this.verticalRotation = Math.max(-1.3, Math.min(1.3, this.verticalRotation));
-          }
-          this.lastTouchX = t.clientX;
-          this.lastTouchY = t.clientY;
-        }
-      }
-      e.preventDefault();
-    }, { passive: false });
-
-    const endTouch = (e: TouchEvent) => {
-      for (const t of Array.from(e.changedTouches)) {
-        if (t.identifier === this.moveTouchId) {
-          this.moveTouchId = null;
-          this.joystickActive = false;
-          this.joystickDelta = { x: 0, y: 0 };
-          this.touchStart = null;
-        }
-        if (t.identifier === this.lookTouchId) {
-          this.lookTouchId = null;
-        }
-      }
-    };
-    this.canvas.addEventListener('touchend', endTouch);
-    this.canvas.addEventListener('touchcancel', endTouch);
-
-    window.addEventListener('resize', () => this.resize());
+  private removeEventListeners() {
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+    this.canvas.removeEventListener('mousedown', this.handleMouseDown);
+    window.removeEventListener('mouseup', this.handleMouseUp);
+    window.removeEventListener('mousemove', this.handleMouseMove);
+    this.canvas.removeEventListener('touchstart', this.handleTouchStart);
+    this.canvas.removeEventListener('touchmove', this.handleTouchMove);
+    this.canvas.removeEventListener('touchend', this.handleTouchEnd);
+    this.canvas.removeEventListener('touchcancel', this.handleTouchEnd);
+    window.removeEventListener('resize', this.handleResize);
   }
 
   private resize() {
@@ -2704,8 +2858,6 @@ export class GameEngine {
       this.camera.rotation.y = this.playerRotation;
       this.camera.rotation.x = this.verticalRotation;
     }
-
-    this.animateApples(this.cinematicTime);
   }
 
   private updateGame(delta: number) {
@@ -2713,8 +2865,7 @@ export class GameEngine {
     this.updateCamera(delta);
     this.checkDiscoveries();
     this.checkInspect();
-    this.animateApples(this.elapsedTotal);
-    this.callbacks.onScoreUpdate(Math.floor(this.score));
+    this.emitScoreIfChanged();
 
     // Regeneración muy lenta de frutos/bayas (tick barato, no cada frame por objeto)
     this.regenTick += delta;
@@ -2771,13 +2922,13 @@ export class GameEngine {
     this.food -= consumed;
     this.score += consumed; // 1 score por cada 1 saciedad consumida
     this.callbacks.onFoodUpdate?.(Math.max(0, Math.ceil(this.food)));
-    this.callbacks.onScoreUpdate(Math.floor(this.score));
+    this.emitScoreIfChanged();
   }
 
   private updateMovement(delta: number) {
     // ═══ CORRIENTE DEL RÍO ═══
     // Si el jugador está dentro de la lámina de agua, la corriente lo arrastra suavemente hacia el Este (+X).
-    const distToRiverCenter = Math.abs(this.playerPosition.z - this.riverZ);
+    const distToRiverCenter = Math.abs(this.playerPosition.z - this.riverCenterZ(this.playerPosition.x));
     if (distToRiverCenter < this.riverHalfWidth) {
       const centerFactor = 1 - (distToRiverCenter / this.riverHalfWidth);
       const currentStrength = 2.0 * centerFactor;
@@ -2821,7 +2972,7 @@ export class GameEngine {
     this.isSprinting = wantsSprint && this.food > 0;
     const currentSpeed = (this.isSprinting ? this.playerSprintSpeed : this.playerSpeed) * delta;
 
-    const input = new THREE.Vector3();
+    const input = this.inputVector.set(0, 0, 0);
     if (this.keys['w'] || this.keys['arrowup']) input.z = -1;
     if (this.keys['s'] || this.keys['arrowdown']) input.z = 1;
     if (this.keys['a'] || this.keys['arrowleft']) input.x = -1;
@@ -2935,7 +3086,6 @@ export class GameEngine {
       if (this.playerPosition.distanceTo(d.mesh.position) < 3) {
         d.discovered = true;
         this.discoveries.add(d.id);
-        this.callbacks.onDiscovery(this.discoveries.size);
       }
     }
   }
@@ -2952,32 +3102,63 @@ export class GameEngine {
     this.inspectPressed = true;
     this.touchInspect = false;
 
-    // ¿Está Adán junto al árbol del conocimiento?
-    // Se calcula ANTES que nada: el árbol tiene prioridad sobre la charla de
-    // Lilith. Antes ella merodeaba el claro y, al estar a menos de 8 unidades,
-    // su diálogo hacía `return` y las inspecciones del árbol NUNCA se contaban.
-    let nearTreePart = false;
+    // Resolver primero a qué objetivo apunta la interacción. Cerca del árbol
+    // pueden coincidir sus dos radios: en ese caso mandan la mirada, la
+    // distancia y, dentro del espacio personal de Lilith, el gesto de apartar.
+    const forwardX = -Math.sin(this.playerRotation);
+    const forwardZ = -Math.cos(this.playerRotation);
+
+    let treeDistanceSq = Number.POSITIVE_INFINITY;
+    let treeTargetX = 0;
+    let treeTargetZ = 0;
     if (this.appleTree) {
       this.appleTree.traverse(child => {
-        if (nearTreePart) return;
-        const dx = this.playerPosition.x - child.position.x;
-        const dz = this.playerPosition.z - child.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < 5) nearTreePart = true;
+        child.getWorldPosition(this.inspectWorldPosition);
+        const dx = this.playerPosition.x - this.inspectWorldPosition.x;
+        const dz = this.playerPosition.z - this.inspectWorldPosition.z;
+        const distSq = dx * dx + dz * dz;
+        if (distSq < treeDistanceSq) {
+          treeDistanceSq = distSq;
+          treeTargetX = this.inspectWorldPosition.x;
+          treeTargetZ = this.inspectWorldPosition.z;
+        }
       });
     }
+    const treeDistance = Math.sqrt(treeDistanceSq);
+    const treeFacing = Number.isFinite(treeDistance) && treeDistance > 0.001
+      ? (forwardX * (treeTargetX - this.playerPosition.x) +
+         forwardZ * (treeTargetZ - this.playerPosition.z)) / treeDistance
+      : -1;
 
-    // 1. Interacción con LILITH (Detección dinámica)
-    // Solo intercepta si NO estás inspeccionando el árbol.
-    if (this.lilithGroup && !nearTreePart) {
+    let lilithDistanceSq = Number.POSITIVE_INFINITY;
+    let lilithFacing = -1;
+    if (this.lilithGroup) {
+      const toLilithX = this.lilithGroup.position.x - this.playerPosition.x;
+      const toLilithZ = this.lilithGroup.position.z - this.playerPosition.z;
+      lilithDistanceSq = toLilithX * toLilithX + toLilithZ * toLilithZ;
+      const lilithDistance = Math.sqrt(lilithDistanceSq);
+      if (lilithDistance > 0.001) {
+        lilithFacing = (forwardX * toLilithX + forwardZ * toLilithZ) / lilithDistance;
+      }
+    }
+
+    const interactionTarget = chooseInteractionTarget({
+      treeDistanceSq,
+      lilithDistanceSq,
+      treeFacing,
+      lilithFacing,
+    });
+
+    // 1. Interacción con LILITH (detección dinámica y objetivo explícito)
+    if (this.lilithGroup && interactionTarget === 'lilith') {
       const dxL = this.playerPosition.x - this.lilithGroup.position.x;
       const dzL = this.playerPosition.z - this.lilithGroup.position.z;
       const dLSq = dxL * dxL + dzL * dzL;
 
       // Si te has metido en su espacio (< 1.7 unidades): te aparta con las manos.
-      // Antes el radio era 2.6 y se comía casi toda la zona de charla: por eso
-      // parecía que solo respondía cuando ella estaba caminando (alejándose).
-      if (dLSq < 2.89 && this.lilithBlockCooldown <= 0 && this.lilithState !== 'blocking') {
+      // Esta distancia tiene prioridad incluso junto al árbol, para que pulsar E
+      // sobre Lilith nunca sume una inspección ni dispare su cinemática.
+      if (dLSq < LILITH_SHOVE_DISTANCE_SQ && this.lilithBlockCooldown <= 0 && this.lilithState !== 'blocking') {
         // Te encara antes de alzar las palmas
         this.lilithGroup.rotation.y = Math.atan2(dxL, dzL);
         // Dirección en la que ella retrocederá: alejándose de ti
@@ -3020,16 +3201,18 @@ export class GameEngine {
         if (!this.seenThoughts.has(idx + 100)) {
           this.seenThoughts.add(idx + 100);
           this.score += 1;
-          this.callbacks.onScoreUpdate(Math.floor(this.score));
+          this.emitScoreIfChanged();
         }
         return; // IMPORTANTE: No procesar el árbol
       }
-      // Si está apartándote, la interacción se consume sin diálogo
-      if (dLSq < 64 && busyShoving) return;
+      // Una pulsación dirigida a Lilith siempre se consume aquí, también
+      // durante el cooldown del diálogo o mientras termina de apartarte.
+      return;
     }
 
     // 2. Interacción con el ÁRBOL DEL CONOCIMIENTO
-    if (nearTreePart) {
+    // Solo llega aquí si el selector ha elegido el árbol de forma inequívoca.
+    if (interactionTarget === 'tree') {
       if (this.forbiddenTreeTriggered && !this.forbiddenCinematicActive) {
         if (this.elapsedTotal - this.lastAdamThoughtAt >= 6) {
           this.lastAdamThoughtAt = this.elapsedTotal;
@@ -3039,14 +3222,14 @@ export class GameEngine {
           if (!this.seenThoughts.has(idx)) {
             this.seenThoughts.add(idx);
             this.score += 1;
-            this.callbacks.onScoreUpdate(Math.floor(this.score));
+            this.emitScoreIfChanged();
             if (this.seenThoughts.size >= 21) {
               try {
                 const reg = JSON.parse(localStorage.getItem('edenRegistry') || '{}');
                 if (!reg.memoryDoubts) {
                   reg.memoryDoubts = true;
                   this.score += 21;
-                  this.callbacks.onScoreUpdate(Math.floor(this.score));
+                  this.emitScoreIfChanged();
                   localStorage.setItem('edenRegistry', JSON.stringify(reg));
                 }
               } catch { /* empty */ }
@@ -3069,7 +3252,7 @@ export class GameEngine {
           if (!this.seenThoughts.has(idx)) {
             this.seenThoughts.add(idx);
             this.score += 1;
-            this.callbacks.onScoreUpdate(Math.floor(this.score));
+            this.emitScoreIfChanged();
           }
         }
 
@@ -3080,7 +3263,7 @@ export class GameEngine {
             if (!reg.memoryMandate) {
               reg.memoryMandate = true;
               this.score += 21;
-              this.callbacks.onScoreUpdate(Math.floor(this.score));
+              this.emitScoreIfChanged();
             }
             localStorage.setItem('edenRegistry', JSON.stringify(reg));
           } catch { /* empty */ }

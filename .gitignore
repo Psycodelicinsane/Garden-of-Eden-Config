@@ -17,3 +17,5 @@ npm-debug.log*
 # Editores
 .vscode/
 .idea/
+
+*.patch

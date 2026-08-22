@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 
 interface Registry {
   distanceWalked: number;
@@ -17,7 +17,6 @@ interface Registry {
 
 interface Props {
   onStart: () => void;
-  highScores: number[];
 }
 
 type Page = 'main' | 'memories' | 'stats' | 'map';
@@ -46,6 +45,38 @@ const MEMORIES: Array<{ key: keyof Registry; title: string; desc: string }> = [
 const gold = (a: number) => `rgba(224,190,120,${a})`;
 const SERIF_SHADOW = '0 2px 8px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9)';
 
+// Letras doradas elegantes: degradado + borde fino + brillo suave
+const GOLD_TEXT: CSSProperties = {
+  backgroundImage: 'linear-gradient(180deg, #fffbe6 0%, #ffe9a8 25%, #f5c34a 50%, #d99a1f 80%, #a8740e 100%)',
+  WebkitBackgroundClip: 'text',
+  backgroundClip: 'text',
+  color: 'transparent',
+  WebkitTextStroke: '1px rgba(58,36,4,0.6)',
+  filter: 'drop-shadow(0 2px 1px rgba(40,24,2,0.85)) drop-shadow(0 0 16px rgba(255,195,80,0.35))',
+};
+
+const FRAME_BORDER = '2px solid rgba(224,190,120,0.7)';
+const FRAME_OUTLINE = '1px solid rgba(224,190,120,0.3)';
+const CORNER = '#ffd166';
+
+function FrameCorner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
+  const s: CSSProperties = {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    borderColor: CORNER,
+    borderStyle: 'solid',
+    borderWidth: 0,
+    filter: 'drop-shadow(0 0 6px rgba(255,200,90,0.55))',
+    opacity: 0.9,
+  };
+  if (pos === 'tl') { s.top = -9; s.left = -9; s.borderTopWidth = 3; s.borderLeftWidth = 3; }
+  if (pos === 'tr') { s.top = -9; s.right = -9; s.borderTopWidth = 3; s.borderRightWidth = 3; }
+  if (pos === 'bl') { s.bottom = -9; s.left = -9; s.borderBottomWidth = 3; s.borderLeftWidth = 3; }
+  if (pos === 'br') { s.bottom = -9; s.right = -9; s.borderBottomWidth = 3; s.borderRightWidth = 3; }
+  return <span aria-hidden style={s} />;
+}
+
 function readRegistry(): Registry {
   try {
     const saved = localStorage.getItem('edenRegistry');
@@ -55,7 +86,7 @@ function readRegistry(): Registry {
   }
 }
 
-export default function StartScreen({ onStart, highScores }: Props) {
+export default function StartScreen({ onStart }: Props) {
   const [visible, setVisible] = useState(false);
   const [page, setPage] = useState<Page>('main');
   const [registry] = useState<Registry>(readRegistry);
@@ -74,106 +105,158 @@ export default function StartScreen({ onStart, highScores }: Props) {
         transition: 'opacity 1.2s ease',
       }}
     >
+      {/* ── MARCO DE PANTALLA (borde retro) ── */}
+      <div className="absolute inset-2 md:inset-4 pointer-events-none z-10"
+           style={{
+             border: FRAME_BORDER,
+             outline: FRAME_OUTLINE,
+             outlineOffset: '5px',
+             boxShadow: 'inset 0 0 90px rgba(0,0,0,0.55)',
+           }}>
+        <FrameCorner pos="tl" />
+        <FrameCorner pos="tr" />
+        <FrameCorner pos="bl" />
+        <FrameCorner pos="br" />
+      </div>
+
       {/* ══════ PORTADA ══════ */}
       {page === 'main' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center px-6">
           {visible && (
-            <div className="text-center mb-8 md:mb-10">
-              <p style={{
-                transform: visible ? 'scale(1)' : 'scale(0.85)',
-                transition: 'all 1.4s cubic-bezier(0.16,1,0.3,1) 0.2s',
-                opacity: visible ? 1 : 0,
-              }}>
+            <div className="text-center mb-8 md:mb-10"
+                 style={{
+                   transform: visible ? 'scale(1)' : 'scale(0.88)',
+                   opacity: visible ? 1 : 0,
+                   transition: 'all 1.4s cubic-bezier(0.16,1,0.3,1) 0.2s',
+                 }}>
+              {/* ── TÍTULO ── */}
+              <div className="px-8 py-7 md:px-16 md:py-10">
+
                 <h2 style={{
-                  fontSize: 'clamp(3.2rem, 11vw, 7.5rem)',
+                  fontSize: 'clamp(3rem, 10.5vw, 7rem)',
                   fontFamily: 'Georgia, "Palatino Linotype", serif',
-                  fontWeight: 600,
+                  fontWeight: 700,
                   lineHeight: 1,
-                  color: '#f5e0a8',
-                  letterSpacing: '0.12em',
-                  textShadow: '0 3px rgba(245,220,160,0.35), 0 5px rgba(140,100,30,0.7), 0 8px 16px rgba(90,60,15,0.5), 0 0 80px rgba(0,0,0,0.6)',
+                  letterSpacing: '0.14em',
+                  ...GOLD_TEXT,
                 }}>
                   Garden
                 </h2>
-              </p>
 
-              <div className="flex items-center justify-center gap-4 my-2"
-                   style={{ opacity: visible ? 1 : 0, transition: 'opacity 1s ease 1s' }}>
-                <div style={{
-                  height: 2,
-                  width: visible ? 50 : 0,
-                  background: 'linear-gradient(90deg, transparent, rgba(220,190,110,0.5))',
-                  transition: 'width 1.2s ease 1s',
-                }} />
-                <p>
-                  <span style={{
-                    fontFamily: 'Georgia, serif',
-                    fontSize: 'clamp(1.1rem, 3.5vw, 1.8rem)',
-                    fontStyle: 'italic',
-                    fontWeight: 500,
-                    color: gold(0.65),
-                    letterSpacing: '0.25em',
-                    textShadow: SERIF_SHADOW,
-                  }}>
-                    of
-                  </span>
-                </p>
-                <div style={{
-                  height: 2,
-                  width: visible ? 50 : 0,
-                  background: 'linear-gradient(270deg, transparent, rgba(220,190,110,0.5))',
-                  transition: 'width 1.2s ease 1s',
-                }} />
-              </div>
+                <div className="flex items-center justify-center gap-4 my-3"
+                     style={{ opacity: visible ? 1 : 0, transition: 'opacity 1s ease 1s' }}>
+                  <div style={{
+                    height: 2,
+                    width: visible ? 50 : 0,
+                    background: 'linear-gradient(90deg, transparent, rgba(220,190,110,0.6))',
+                    transition: 'width 1.2s ease 1s',
+                  }} />
+                  <p>
+                    <span style={{
+                      fontFamily: 'Georgia, serif',
+                      fontSize: 'clamp(1.1rem, 3.5vw, 1.8rem)',
+                      fontStyle: 'italic',
+                      fontWeight: 500,
+                      color: gold(0.7),
+                      letterSpacing: '0.25em',
+                      textShadow: SERIF_SHADOW,
+                    }}>
+                      of
+                    </span>
+                  </p>
+                  <div style={{
+                    height: 2,
+                    width: visible ? 50 : 0,
+                    background: 'linear-gradient(270deg, transparent, rgba(220,190,110,0.6))',
+                    transition: 'width 1.2s ease 1s',
+                  }} />
+                </div>
 
-              <p style={{
-                transform: visible ? 'translateY(0)' : 'translateY(12px)',
-                transition: 'all 1.2s cubic-bezier(0.16,1,0.3,1) 0.5s',
-                opacity: visible ? 1 : 0,
-              }}>
                 <h2 style={{
-                  fontSize: 'clamp(2.5rem, 9vw, 6rem)',
+                  fontSize: 'clamp(2.4rem, 8.5vw, 5.8rem)',
                   fontFamily: 'Georgia, serif',
-                  fontWeight: 600,
+                  fontWeight: 700,
                   lineHeight: 1,
-                  color: '#e8d098',
-                  letterSpacing: '0.22em',
-                  textShadow: '0 3px rgba(230,200,140,0.3), 0 5px rgba(120,80,25,0.6), 0 8px 14px rgba(70,45,10,0.45), 0 0 70px rgba(0,0,0,0.55)',
+                  letterSpacing: '0.24em',
+                  ...GOLD_TEXT,
                 }}>
                   Eden
                 </h2>
-              </p>
 
-              <p className="mt-5 text-sm md:text-base italic"
-                 style={{
-                   fontFamily: 'Georgia, serif',
-                   color: gold(0.55),
-                   letterSpacing: '0.1em',
-                   textShadow: SERIF_SHADOW,
-                   opacity: visible ? 1 : 0,
-                   transition: 'opacity 1s ease 1.4s',
-                 }}>
-                The first morning of man
-              </p>
+                <p className="mt-5 text-sm md:text-base italic"
+                   style={{
+                     fontFamily: 'Georgia, serif',
+                     color: gold(0.6),
+                     letterSpacing: '0.1em',
+                     textShadow: SERIF_SHADOW,
+                     opacity: visible ? 1 : 0,
+                     transition: 'opacity 1s ease 1.4s',
+                   }}>
+                  The first morning of man
+                </p>
+              </div>
             </div>
           )}
 
-          {/* Botón comenzar */}
+          {/* Ornamento sobre el botón */}
+          <div className="flex items-center justify-center gap-3 my-3"
+               style={{ opacity: visible ? 1 : 0, transition: 'opacity 1s ease 1.6s' }}>
+            <span style={{ color: gold(0.5), fontSize: '0.7rem', textShadow: '0 0 8px rgba(255,200,110,0.5)' }}>✦</span>
+            <span style={{ color: gold(0.5), fontSize: '0.5rem' }}>✦</span>
+            <span style={{ color: gold(0.5), fontSize: '0.7rem', textShadow: '0 0 8px rgba(255,200,110,0.5)' }}>✦</span>
+          </div>
+
+          {/* Botón principal al estilo de las pantallas de título clásicas */}
           <button
+            autoFocus
+            aria-label="Iniciar partida"
             onClick={onStart}
-            className="px-12 py-3 border tracking-[0.4em] text-sm md:text-base font-mono uppercase
-                     hover:bg-[rgba(224,190,120,0.12)] active:scale-95 transition-all"
+            className="group relative min-w-[250px] overflow-hidden px-10 py-4
+                     active:scale-95 hover:scale-[1.035] focus-visible:scale-[1.035] transition-transform"
             style={{
-              color: gold(0.95),
-              borderColor: gold(0.45),
-              textShadow: SERIF_SHADOW,
+              color: '#f7d77e',
+              fontFamily: '"Courier New", Courier, monospace',
+              fontWeight: 700,
+              background: 'linear-gradient(180deg, rgba(25,21,10,0.9) 0%, rgba(6,9,5,0.94) 100%)',
+              border: '1px solid rgba(255,211,102,0.82)',
+              outline: '1px solid rgba(224,190,120,0.28)',
+              outlineOffset: 4,
+              boxShadow: 'inset 0 0 0 1px rgba(255,239,180,0.08), inset 0 8px 20px rgba(255,190,70,0.04), 0 0 24px rgba(255,190,80,0.28)',
+              textShadow: '0 0 8px rgba(255,198,79,0.62), 0 2px 2px #000',
               opacity: visible ? 1 : 0,
-              transition: 'opacity 1s ease 1.8s, background 0.2s ease, transform 0.1s ease',
-              animation: visible ? 'startBlink 2.4s ease-in-out 2.6s infinite' : 'none',
+              transition: 'opacity 1s ease 1.8s, transform 0.15s ease, filter 0.2s ease',
+              animation: visible ? 'startPulse 2.2s ease-in-out 2.6s infinite' : 'none',
             }}
           >
-            Comenzar
+            <span
+              aria-hidden
+              className="absolute inset-x-3 top-1 h-px"
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(255,220,130,0.38), transparent)' }}
+            />
+            <span className="flex items-center justify-center gap-4">
+              <span aria-hidden className="start-marker text-[10px]">◆</span>
+              <span className="text-sm md:text-base tracking-[0.28em] whitespace-nowrap">PRESS START</span>
+              <span aria-hidden className="start-marker text-[10px]">◆</span>
+            </span>
+            <span
+              aria-hidden
+              className="absolute inset-x-3 bottom-1 h-px"
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(255,220,130,0.2), transparent)' }}
+            />
           </button>
+
+          <p
+            aria-hidden
+            className="mt-3 text-[9px] tracking-[0.35em] font-mono"
+            style={{
+              color: gold(0.38),
+              textShadow: SERIF_SHADOW,
+              opacity: visible ? 1 : 0,
+              transition: 'opacity 1s ease 2.1s',
+            }}
+          >
+            ENTER / CLICK
+          </p>
 
           {registry.bestScore > 0 && (
             <p className="mt-4 text-[10px] font-mono tracking-[0.3em]"
@@ -279,52 +362,34 @@ export default function StartScreen({ onStart, highScores }: Props) {
               ))}
             </div>
 
-            {highScores.length > 0 && (
-              <div className="mb-5">
-                <p className="text-center text-[10px] tracking-[0.3em] mb-2" style={{ color: gold(0.3) }}>
-                  TOP SCORES
-                </p>
-                {highScores.slice(0, 5).map((s, i) => (
-                  <p key={i} className="flex justify-between px-10">
-                    <span className="text-[10px] font-mono" style={{ color: gold(0.3) }}>
-                      {i + 1}.
-                    </span>
-                    <span className="text-[10px] font-mono" style={{ color: gold(0.5) }}>
-                      {s.toLocaleString()}
-                    </span>
-                  </p>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}
 
       {/* ══════ MAPA DEL JARDÍN ══════ */}
       {page === 'map' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-6">
-          <p className="text-center text-xs tracking-[0.5em] mb-4"
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-3">
+          <p className="text-center text-xs tracking-[0.5em] mb-3"
              style={{ fontFamily: 'Georgia, serif', fontWeight: 500, color: gold(0.65), textShadow: SERIF_SHADOW }}>
             EL JARDÍN
           </p>
           <div
-            className="max-w-[82vw] max-h-[62vh] overflow-hidden"
+            className="shrink-0 overflow-hidden"
             style={{
+              width: 'min(94vw, 76vh)',
+              height: 'min(94vw, 76vh)',
               border: `1px solid ${gold(0.35)}`,
-              boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
+              boxShadow: '0 10px 48px rgba(0,0,0,0.78), 0 0 18px rgba(224,190,120,0.08)',
             }}
           >
             <img
-              src="/images/mapa-jardin-eden.png"
+              src="images/mapa-jardin-eden.png"
               alt="Mapa del jardín del Edén visto desde arriba"
+              width={2048}
+              height={2048}
               className="block w-full h-full object-contain"
-              style={{ maxHeight: '62vh' }}
             />
           </div>
-          <p className="mt-3 text-[10px] italic"
-             style={{ fontFamily: 'Georgia, serif', color: gold(0.42), textShadow: SERIF_SHADOW }}>
-            El árbol del conocimiento en el centro · el río al norte
-          </p>
         </div>
       )}
 
@@ -381,9 +446,24 @@ export default function StartScreen({ onStart, highScores }: Props) {
       </div>
 
       <style>{`
-        @keyframes startBlink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.55; }
+        @keyframes startPulse {
+          0%, 100% {
+            box-shadow: inset 0 0 0 1px rgba(255,239,180,0.08), inset 0 8px 20px rgba(255,190,70,0.04), 0 0 18px rgba(255,190,80,0.2);
+            filter: brightness(0.94);
+          }
+          50% {
+            box-shadow: inset 0 0 0 1px rgba(255,239,180,0.14), inset 0 8px 22px rgba(255,190,70,0.08), 0 0 30px rgba(255,190,80,0.42);
+            filter: brightness(1.1);
+          }
+        }
+        @keyframes startMarkerBlink {
+          0%, 35%, 100% { opacity: 0.95; }
+          50%, 80% { opacity: 0.25; }
+        }
+        .start-marker {
+          animation: startMarkerBlink 1.1s steps(1, end) infinite;
+          color: #ffd166;
+          text-shadow: 0 0 9px rgba(255,198,79,0.8);
         }
       `}</style>
     </div>
