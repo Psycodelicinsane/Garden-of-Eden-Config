@@ -20,8 +20,9 @@
 ## Características
 
 - Mundo 3D generado con Three.js.
-- Río serpenteante con cauce, orillas y corriente.
-- Bosque de 240 árboles, con 60 frutales recolectables repartidos por todo el jardín.
+- Río al norte del claro, con grandes meandros, cauce, orillas y corriente.
+- Bosque de 240 árboles concentrado en el cinturón exterior, con 60 frutales repartidos por el jardín.
+- Montañas transitables en el oeste, suroeste y sureste, siguiendo el mapa ilustrado.
 - Árbol del Conocimiento con interacciones y cinemática propia.
 - Lilith como personaje dinámico, con animación, diálogo, colisiones y anatomía articulada.
 - Intro multicolor de PSYCODELICINSANE.

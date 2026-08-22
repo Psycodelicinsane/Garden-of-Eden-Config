@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { GameState } from '../App';
 import { emitScoreIfChanged } from './score';
+import {
+  RIVER_HALF_WIDTH,
+  isFruitTreeIndex,
+  isMountainCore,
+  mountainHeight,
+  riverCenterZ,
+} from './worldLayout';
 
 interface GameCallbacks {
   onStateChange: (state: GameState) => void;
@@ -733,18 +740,13 @@ export class GameEngine {
   }
 
   // ═══ RÍO ═══
-  // Río serpenteante al norte del árbol central, imitando la forma del mapa
-  // de la imagen: entra por la izquierda, serpentea y se ensancha hacia la derecha.
-  private readonly riverBaseZ = 35;       // latitud base (norte) del cauce
-  private readonly riverHalfWidth = 10;   // ancho de la lámina de agua
-  private readonly riverBedDepth = 2.8;   // profundidad del lecho
+  // El recorrido se define mediante puntos de control en worldLayout.ts para
+  // reproducir las grandes curvas del mapa ilustrado al norte del claro.
+  private readonly riverHalfWidth = RIVER_HALF_WIDTH;
+  private readonly riverBedDepth = 2.8;
 
-  // Centro del cauce en función de X: ondas suaves superpuestas para un
-  // recorrido serpenteante (en lugar de la línea recta original).
   private riverCenterZ(x: number) {
-    return this.riverBaseZ
-      + Math.sin(x * 0.018) * 13
-      + Math.sin(x * 0.006 + 1.7) * 8;
+    return riverCenterZ(x);
   }
 
   // Terreno base SIN modificar por el río
@@ -759,6 +761,8 @@ export class GameEngine {
     h += this.sstep(150, 235, d) * 7;
     const far = this.sstep(260, 900, d);
     h += far * (26 + Math.sin(x * 0.006) * Math.cos(z * 0.005) * 14 + Math.sin(d * 0.012) * 9);
+    // Cumbres compactas en oeste, suroeste y sureste, como en el mapa.
+    h += mountainHeight(x, z);
     return h;
   }
 
@@ -1071,22 +1075,25 @@ export class GameEngine {
 
     let placed = 0;
     let guard = 0;
-    while (placed < count && guard < count * 10) {
+    while (placed < count && guard < count * 30) {
       guard++;
+      const isFruitTree = isFruitTreeIndex(placed);
       const x = this.rand() * 840 - 420;
       const z = this.rand() * 840 - 420;
       const d = Math.sqrt(x * x + z * z);
-      // Respetar el claro del árbol prohibido y el cauce del río
-      if (d < 16) continue;
-      if (Math.abs(z - this.riverCenterZ(x)) < 20) continue;
+
+      // El bosque denso forma un cinturón exterior. Los frutales sí aparecen
+      // dentro del jardín, pero dejan libre el claro del Árbol del Conocimiento.
+      if (d < (isFruitTree ? 42 : 190)) continue;
+      if (Math.abs(z - this.riverCenterZ(x)) < 28) continue;
+      // Las cumbres quedan despejadas para que las montañas se lean a distancia.
+      if (isMountainCore(x, z)) continue;
 
       const y = this.getTerrainHeight(x, z);
       const tree = new THREE.Group();
       tree.position.set(x, y, z);
 
-      // Cada cuarto árbol es FRUTAL, sin limitarlo al centro: 60 de los 240
-      // árboles quedan repartidos por toda la extensión jugable del jardín.
-      const isFruitTree = placed % 4 === 0;
+      // Cada cuarto árbol es frutal: 60 de los 240 árboles totales.
       const s = 0.75 + this.rand() * 0.85;
 
       if (isFruitTree) {
