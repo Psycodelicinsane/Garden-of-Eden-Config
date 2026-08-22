@@ -1,0 +1,56 @@
+name: Validar juego
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validar-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Tests, tipos, build y seguridad
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Comprobar TypeScript
+        run: npm run typecheck
+
+      - name: Ejecutar tests
+        run: npm test
+
+      - name: Compilar juego
+        run: npm run build
+
+      - name: Comprobar vulnerabilidades
+        run: npm audit --audit-level=high
+
+      - name: Guardar build descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: garden-of-eden-v2.3.0
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
