@@ -5,7 +5,6 @@ import { emitScoreIfChanged } from './score';
 interface GameCallbacks {
   onStateChange: (state: GameState) => void;
   onScoreUpdate: (score: number) => void;
-  onDiscovery?: (count: number) => void;
   onFoodUpdate?: (count: number) => void;
   onCinematicUpdate?: (progress: number) => void;
   onForbiddenTree?: () => void;
@@ -257,8 +256,9 @@ export class GameEngine {
   private readonly cameraSmoothness = 18; // Más suave
   private headBob = 0;
   private targetHeight = 0; // Suavizar subidas/bajadas de terreno
-  // Vector de entrada reutilizado: evita crear un objeto por frame
+  // Vectores reutilizados para evitar crear objetos durante gameplay.
   private inputVector = new THREE.Vector3();
+  private inspectWorldPosition = new THREE.Vector3();
 
   private keys: Record<string, boolean> = {};
   private mouseMovement = { x: 0, y: 0 };
@@ -632,7 +632,6 @@ export class GameEngine {
     this.discoverables.forEach(d => d.discovered = false);
 
     this.emitScoreIfChanged();
-    this.callbacks.onDiscovery?.(0);
     this.callbacks.onFoodUpdate?.(0);
   }
 
@@ -3073,7 +3072,6 @@ export class GameEngine {
       if (this.playerPosition.distanceTo(d.mesh.position) < 3) {
         d.discovered = true;
         this.discoveries.add(d.id);
-        this.callbacks.onDiscovery?.(this.discoveries.size);
       }
     }
   }
@@ -3098,10 +3096,11 @@ export class GameEngine {
     if (this.appleTree) {
       this.appleTree.traverse(child => {
         if (nearTreePart) return;
-        const dx = this.playerPosition.x - child.position.x;
-        const dz = this.playerPosition.z - child.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < 5) nearTreePart = true;
+        child.getWorldPosition(this.inspectWorldPosition);
+        const dx = this.playerPosition.x - this.inspectWorldPosition.x;
+        const dz = this.playerPosition.z - this.inspectWorldPosition.z;
+        const distSq = dx * dx + dz * dz;
+        if (distSq < 25) nearTreePart = true;
       });
     }
 

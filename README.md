@@ -92,9 +92,9 @@ El juego guarda automáticamente en el navegador:
 - estadísticas de movimiento y tiempo;
 - recuerdos desbloqueados;
 - descubrimientos;
-- mejor puntuación y registros anteriores.
+- mejor puntuación alcanzada.
 
-Para reiniciar completamente el progreso, elimina las claves `edenRegistry` y `edenHighScores` del almacenamiento local del sitio.
+Para reiniciar completamente el progreso, elimina la clave `edenRegistry` del almacenamiento local del sitio.
 
 ## Estructura principal
 

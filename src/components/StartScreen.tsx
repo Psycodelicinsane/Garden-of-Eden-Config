@@ -17,7 +17,6 @@ interface Registry {
 
 interface Props {
   onStart: () => void;
-  highScores: number[];
 }
 
 type Page = 'main' | 'memories' | 'stats' | 'map';
@@ -87,7 +86,7 @@ function readRegistry(): Registry {
   }
 }
 
-export default function StartScreen({ onStart, highScores }: Props) {
+export default function StartScreen({ onStart }: Props) {
   const [visible, setVisible] = useState(false);
   const [page, setPage] = useState<Page>('main');
   const [registry] = useState<Registry>(readRegistry);
@@ -331,23 +330,6 @@ export default function StartScreen({ onStart, highScores }: Props) {
               ))}
             </div>
 
-            {highScores.length > 0 && (
-              <div className="mb-5">
-                <p className="text-center text-[10px] tracking-[0.3em] mb-2" style={{ color: gold(0.3) }}>
-                  TOP SCORES
-                </p>
-                {highScores.slice(0, 5).map((s, i) => (
-                  <p key={i} className="flex justify-between px-10">
-                    <span className="text-[10px] font-mono" style={{ color: gold(0.3) }}>
-                      {i + 1}.
-                    </span>
-                    <span className="text-[10px] font-mono" style={{ color: gold(0.5) }}>
-                      {s.toLocaleString()}
-                    </span>
-                  </p>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -367,7 +349,7 @@ export default function StartScreen({ onStart, highScores }: Props) {
             }}
           >
             <img
-              src="/images/mapa-jardin-eden.png"
+              src="images/mapa-jardin-eden.png"
               alt="Mapa del jardín del Edén visto desde arriba"
               className="block w-full h-full object-contain"
               style={{ maxHeight: '62vh' }}

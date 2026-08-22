@@ -20,26 +20,11 @@ export default function App() {
   const [showIntro, setShowIntro] = useState(true);
   const [adminBootToGameplay, setAdminBootToGameplay] = useState(false);
   const [score, setScore] = useState(0);
-  const [highScores, setHighScores] = useState<number[]>([]);
   const [foodCount, setFoodCount] = useState(0);
   const [cinematicProgress, setCinematicProgress] = useState(0);
   const [showAwakening, setShowAwakening] = useState(false);
   const [showForbiddenTree, setShowForbiddenTree] = useState(false);
   const [adamThought, setAdamThought] = useState<{ text: string; key: number } | null>(null);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('edenHighScores');
-      if (!saved) return;
-      const parsed: unknown = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        setHighScores(parsed.filter((score): score is number => Number.isFinite(score)));
-      }
-    } catch {
-      // Un registro antiguo o corrupto no debe impedir que arranque el juego.
-      localStorage.removeItem('edenHighScores');
-    }
-  }, []);
 
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -188,7 +173,7 @@ export default function App() {
       )}
 
       {gameState === 'start' && !showIntro && (
-        <StartScreen onStart={handleStart} highScores={highScores} />
+        <StartScreen onStart={handleStart} />
       )}
 
       {(gameState === 'playing' || gameState === 'cinematic') && (
