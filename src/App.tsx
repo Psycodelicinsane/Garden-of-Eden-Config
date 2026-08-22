@@ -16,6 +16,7 @@ export default function App() {
   const gameEngineRef = useRef<GameEngine>(null);
   const gameStateRef = useRef<GameState>('start');
   const showIntroRef = useRef(true);
+  const showForbiddenTreeRef = useRef(false);
   const [gameState, setGameState] = useState<GameState>('start');
   const [showIntro, setShowIntro] = useState(true);
   const [adminBootToGameplay, setAdminBootToGameplay] = useState(false);
@@ -29,7 +30,8 @@ export default function App() {
   useEffect(() => {
     gameStateRef.current = gameState;
     showIntroRef.current = showIntro;
-  }, [gameState, showIntro]);
+    showForbiddenTreeRef.current = showForbiddenTree;
+  }, [gameState, showIntro, showForbiddenTree]);
 
   // Crear el motor UNA sola vez al montar.
   // Durante la intro solo carga el jardín en memoria; no arranca el loop del título aún.
@@ -41,7 +43,10 @@ export default function App() {
       onScoreUpdate: setScore,
       onFoodUpdate: setFoodCount,
       onCinematicUpdate: setCinematicProgress,
-      onForbiddenTree: () => setShowForbiddenTree(true),
+      onForbiddenTree: () => {
+        showForbiddenTreeRef.current = true;
+        setShowForbiddenTree(true);
+      },
       onAdamThought: (text: string) => setAdamThought({ text, key: Date.now() }),
     });
 
@@ -103,9 +108,23 @@ export default function App() {
       }
 
       if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+
+        // Atajo temporal de administración: también cierra la cinemática del
+        // Árbol del Conocimiento si está activa.
+        if (showForbiddenTreeRef.current) {
+          showForbiddenTreeRef.current = false;
+          setShowForbiddenTree(false);
+          setShowAwakening(false);
+          gameEngineRef.current?.endForbiddenCinematic();
+          gameEngineRef.current?.resume();
+          return;
+        }
+
         if (introVisible || currentState === 'start' || currentState === 'cinematic') {
           setAdminBootToGameplay(true);
           setShowIntro(false);
+          setShowAwakening(false);
           setGameState('playing');
           setCinematicProgress(1);
           gameEngineRef.current?.skipCinematic();
@@ -154,6 +173,7 @@ export default function App() {
       <ForbiddenTreeCinematic
         show={showForbiddenTree}
         onEnd={() => {
+          showForbiddenTreeRef.current = false;
           setShowForbiddenTree(false);
           gameEngineRef.current?.endForbiddenCinematic();
           gameEngineRef.current?.resume();
@@ -196,6 +216,7 @@ export default function App() {
           setFoodCount(0);
           setCinematicProgress(0);
           setAdminBootToGameplay(false);
+          showForbiddenTreeRef.current = false;
           setShowForbiddenTree(false);
           setShowAwakening(false);
           setAdamThought(null);

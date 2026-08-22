@@ -75,7 +75,7 @@ npm run dev -- --host 0.0.0.0
 | Saltar | `Espacio` — requiere saciedad |
 | Inspeccionar / interactuar | `E` |
 | Pausar / continuar | `Esc` |
-| Saltar intro y cinemática para pruebas | `P` |
+| Saltar la intro o cualquier cinemática (atajo temporal de administración) | `P` |
 
 ### Móvil y tablet
 
