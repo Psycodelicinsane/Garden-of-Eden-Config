@@ -368,23 +368,26 @@ export default function StartScreen({ onStart }: Props) {
 
       {/* ══════ MAPA DEL JARDÍN ══════ */}
       {page === 'map' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-6">
-          <p className="text-center text-xs tracking-[0.5em] mb-4"
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-3">
+          <p className="text-center text-xs tracking-[0.5em] mb-3"
              style={{ fontFamily: 'Georgia, serif', fontWeight: 500, color: gold(0.65), textShadow: SERIF_SHADOW }}>
             EL JARDÍN
           </p>
           <div
-            className="max-w-[82vw] max-h-[62vh] overflow-hidden"
+            className="shrink-0 overflow-hidden"
             style={{
+              width: 'min(94vw, 76vh)',
+              height: 'min(94vw, 76vh)',
               border: `1px solid ${gold(0.35)}`,
-              boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
+              boxShadow: '0 10px 48px rgba(0,0,0,0.78), 0 0 18px rgba(224,190,120,0.08)',
             }}
           >
             <img
               src="images/mapa-jardin-eden.png"
               alt="Mapa del jardín del Edén visto desde arriba"
+              width={2048}
+              height={2048}
               className="block w-full h-full object-contain"
-              style={{ maxHeight: '62vh' }}
             />
           </div>
         </div>
