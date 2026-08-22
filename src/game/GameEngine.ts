@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { GameState } from '../App';
 import { emitScoreIfChanged } from './score';
 import {
+  LILITH_SHOVE_DISTANCE_SQ,
+  chooseInteractionTarget,
+} from './interactionTarget';
+import {
   RIVER_HALF_WIDTH,
   isFruitTreeIndex,
   isMountainCore,
@@ -3098,33 +3102,63 @@ export class GameEngine {
     this.inspectPressed = true;
     this.touchInspect = false;
 
-    // ¿Está Adán junto al árbol del conocimiento?
-    // Se calcula ANTES que nada: el árbol tiene prioridad sobre la charla de
-    // Lilith. Antes ella merodeaba el claro y, al estar a menos de 8 unidades,
-    // su diálogo hacía `return` y las inspecciones del árbol NUNCA se contaban.
-    let nearTreePart = false;
+    // Resolver primero a qué objetivo apunta la interacción. Cerca del árbol
+    // pueden coincidir sus dos radios: en ese caso mandan la mirada, la
+    // distancia y, dentro del espacio personal de Lilith, el gesto de apartar.
+    const forwardX = -Math.sin(this.playerRotation);
+    const forwardZ = -Math.cos(this.playerRotation);
+
+    let treeDistanceSq = Number.POSITIVE_INFINITY;
+    let treeTargetX = 0;
+    let treeTargetZ = 0;
     if (this.appleTree) {
       this.appleTree.traverse(child => {
-        if (nearTreePart) return;
         child.getWorldPosition(this.inspectWorldPosition);
         const dx = this.playerPosition.x - this.inspectWorldPosition.x;
         const dz = this.playerPosition.z - this.inspectWorldPosition.z;
         const distSq = dx * dx + dz * dz;
-        if (distSq < 25) nearTreePart = true;
+        if (distSq < treeDistanceSq) {
+          treeDistanceSq = distSq;
+          treeTargetX = this.inspectWorldPosition.x;
+          treeTargetZ = this.inspectWorldPosition.z;
+        }
       });
     }
+    const treeDistance = Math.sqrt(treeDistanceSq);
+    const treeFacing = Number.isFinite(treeDistance) && treeDistance > 0.001
+      ? (forwardX * (treeTargetX - this.playerPosition.x) +
+         forwardZ * (treeTargetZ - this.playerPosition.z)) / treeDistance
+      : -1;
 
-    // 1. Interacción con LILITH (Detección dinámica)
-    // Solo intercepta si NO estás inspeccionando el árbol.
-    if (this.lilithGroup && !nearTreePart) {
+    let lilithDistanceSq = Number.POSITIVE_INFINITY;
+    let lilithFacing = -1;
+    if (this.lilithGroup) {
+      const toLilithX = this.lilithGroup.position.x - this.playerPosition.x;
+      const toLilithZ = this.lilithGroup.position.z - this.playerPosition.z;
+      lilithDistanceSq = toLilithX * toLilithX + toLilithZ * toLilithZ;
+      const lilithDistance = Math.sqrt(lilithDistanceSq);
+      if (lilithDistance > 0.001) {
+        lilithFacing = (forwardX * toLilithX + forwardZ * toLilithZ) / lilithDistance;
+      }
+    }
+
+    const interactionTarget = chooseInteractionTarget({
+      treeDistanceSq,
+      lilithDistanceSq,
+      treeFacing,
+      lilithFacing,
+    });
+
+    // 1. Interacción con LILITH (detección dinámica y objetivo explícito)
+    if (this.lilithGroup && interactionTarget === 'lilith') {
       const dxL = this.playerPosition.x - this.lilithGroup.position.x;
       const dzL = this.playerPosition.z - this.lilithGroup.position.z;
       const dLSq = dxL * dxL + dzL * dzL;
 
       // Si te has metido en su espacio (< 1.7 unidades): te aparta con las manos.
-      // Antes el radio era 2.6 y se comía casi toda la zona de charla: por eso
-      // parecía que solo respondía cuando ella estaba caminando (alejándose).
-      if (dLSq < 2.89 && this.lilithBlockCooldown <= 0 && this.lilithState !== 'blocking') {
+      // Esta distancia tiene prioridad incluso junto al árbol, para que pulsar E
+      // sobre Lilith nunca sume una inspección ni dispare su cinemática.
+      if (dLSq < LILITH_SHOVE_DISTANCE_SQ && this.lilithBlockCooldown <= 0 && this.lilithState !== 'blocking') {
         // Te encara antes de alzar las palmas
         this.lilithGroup.rotation.y = Math.atan2(dxL, dzL);
         // Dirección en la que ella retrocederá: alejándose de ti
@@ -3171,12 +3205,14 @@ export class GameEngine {
         }
         return; // IMPORTANTE: No procesar el árbol
       }
-      // Si está apartándote, la interacción se consume sin diálogo
-      if (dLSq < 64 && busyShoving) return;
+      // Una pulsación dirigida a Lilith siempre se consume aquí, también
+      // durante el cooldown del diálogo o mientras termina de apartarte.
+      return;
     }
 
     // 2. Interacción con el ÁRBOL DEL CONOCIMIENTO
-    if (nearTreePart) {
+    // Solo llega aquí si el selector ha elegido el árbol de forma inequívoca.
+    if (interactionTarget === 'tree') {
       if (this.forbiddenTreeTriggered && !this.forbiddenCinematicActive) {
         if (this.elapsedTotal - this.lastAdamThoughtAt >= 6) {
           this.lastAdamThoughtAt = this.elapsedTotal;

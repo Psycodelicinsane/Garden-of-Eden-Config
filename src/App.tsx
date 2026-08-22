@@ -17,9 +17,12 @@ export default function App() {
   const gameStateRef = useRef<GameState>('start');
   const showIntroRef = useRef(true);
   const showForbiddenTreeRef = useRef(false);
+  const exploreHintStartedRef = useRef(false);
+  const exploreHintTimerRef = useRef<number | null>(null);
   const [gameState, setGameState] = useState<GameState>('start');
   const [showIntro, setShowIntro] = useState(true);
   const [adminBootToGameplay, setAdminBootToGameplay] = useState(false);
+  const [showExploreHint, setShowExploreHint] = useState(false);
   const [score, setScore] = useState(0);
   const [foodCount, setFoodCount] = useState(0);
   const [cinematicProgress, setCinematicProgress] = useState(0);
@@ -32,6 +35,35 @@ export default function App() {
     showIntroRef.current = showIntro;
     showForbiddenTreeRef.current = showForbiddenTree;
   }, [gameState, showIntro, showForbiddenTree]);
+
+  // La ayuda inicial debe verse una sola vez por partida y desaparecer a los
+  // siete segundos aunque el jugador siga con cero alimentos.
+  useEffect(() => {
+    if (gameState === 'start') {
+      if (exploreHintTimerRef.current !== null) {
+        window.clearTimeout(exploreHintTimerRef.current);
+        exploreHintTimerRef.current = null;
+      }
+      exploreHintStartedRef.current = false;
+      setShowExploreHint(false);
+      return;
+    }
+
+    if (gameState === 'playing' && !exploreHintStartedRef.current) {
+      exploreHintStartedRef.current = true;
+      setShowExploreHint(true);
+      exploreHintTimerRef.current = window.setTimeout(() => {
+        setShowExploreHint(false);
+        exploreHintTimerRef.current = null;
+      }, 7000);
+    }
+  }, [gameState]);
+
+  useEffect(() => () => {
+    if (exploreHintTimerRef.current !== null) {
+      window.clearTimeout(exploreHintTimerRef.current);
+    }
+  }, []);
 
   // Crear el motor UNA sola vez al montar.
   // Durante la intro solo carga el jardín en memoria; no arranca el loop del título aún.
@@ -205,6 +237,7 @@ export default function App() {
           onJump={() => gameEngineRef.current?.triggerTouchJump()}
           onInspect={() => gameEngineRef.current?.triggerInspect()}
           showControls={gameState === 'playing'}
+          showExploreHint={showExploreHint}
         />
       )}
 

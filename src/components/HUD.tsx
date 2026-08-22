@@ -6,9 +6,19 @@ interface HUDProps {
   onJump: () => void;
   onInspect: () => void;
   showControls: boolean;
+  showExploreHint: boolean;
 }
 
-export default function HUD({ score, food, onPause, onSprint, onJump, onInspect, showControls }: HUDProps) {
+export default function HUD({
+  score,
+  food,
+  onPause,
+  onSprint,
+  onJump,
+  onInspect,
+  showControls,
+  showExploreHint,
+}: HUDProps) {
   return (
     <>
       {/* HUD estilo PS2 */}
@@ -34,7 +44,7 @@ export default function HUD({ score, food, onPause, onSprint, onJump, onInspect,
         </div>
 
         {/* Bottom center - Hint */}
-        {showControls && food === 0 && (
+        {showControls && showExploreHint && (
           <div className="absolute bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 text-white text-xs text-center"
                style={{
                  textShadow: '2px 2px 0 rgba(0,0,0,0.9)',
