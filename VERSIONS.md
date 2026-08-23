@@ -1,6 +1,10 @@
 # Colección de versiones
 
-Todas las entregas publicadas del Jardín del Edén. Para recopilarlas: [Releases](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases).
+**Antes de tocar el juego:** [AGENTS.md](AGENTS.md).
+
+Lo **anterior a 2.1.0 se hizo en local y no se estaba recopilando**. No hay v1 ni v2.0 en GitHub. La colección **empieza en 2.1.0**. A partir de esa entrega, cada versión debe tener tag, rama `release/vX.Y.Z` y GitHub Release.
+
+Entregas publicadas: [Releases](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases).
 
 | # | Versión | Fecha | Release | Rama | Commit | Cómo abrirla |
 |---|---|---|---|---|---|---|

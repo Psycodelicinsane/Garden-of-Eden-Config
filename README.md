@@ -1,5 +1,8 @@
 # Garden of Eden
 
+> **Modelos y agentes: leed [AGENTS.md](AGENTS.md) antes de tocar el juego.**  
+> Lo anterior a la **2.1.0** se hizo en local y **no se recopiló**. La colección empieza en `v2.1.0`.
+
 ![Versión](https://img.shields.io/badge/versión-3.0.0-d4a72c)
 ![React](https://img.shields.io/badge/React-19-61dafb)
 ![Three.js](https://img.shields.io/badge/Three.js-0.185-black)
@@ -127,6 +130,7 @@ Para reiniciar completamente el progreso, elimina la clave `edenRegistry` del al
 │   ├── App.tsx                 # Estado principal y conexión React/motor
 │   ├── index.css               # Estilos globales
 │   └── main.tsx                # Entrada de React
+├── AGENTS.md                   # Lectura obligatoria para modelos/agentes
 ├── CHANGELOG.md                # Historial de versiones
 ├── VERSIONS.md                 # Colección de entregas publicadas
 ├── tests/                      # Pruebas automatizadas de regresión
