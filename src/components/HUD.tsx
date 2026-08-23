@@ -82,7 +82,7 @@ export default function HUD({
     <>
       {/* ══════ HUD CLÁSICO DEL EDÉN ══════ */}
       <div className="absolute inset-0 pointer-events-none z-40 select-none font-serif">
-        {/* ── TOP LEFT: PLACA DE PAPIRO (GLORIA Y SACIEDAD) ── */}
+        {/* ── TOP LEFT: PLACA DE PAPIRO (SCORE Y SACIEDAD) ── */}
         <div
           className="absolute top-4 left-4 flex items-center gap-2.5 pointer-events-auto"
           style={{ filter: 'drop-shadow(0 6px 18px rgba(0,0,0,0.65))' }}
@@ -114,7 +114,7 @@ export default function HUD({
             </div>
           </div>
 
-          {/* Placa de Gloria en Papiro (Estilo Botón del Título) */}
+          {/* Placa de Score en Papiro (Estilo Botón del Título) */}
           <div className="flex flex-col">
             <div
               className="relative px-4 py-1.5 rounded-xs flex items-center gap-2 shadow-xl"
@@ -127,7 +127,7 @@ export default function HUD({
               }}
             >
               <span className="text-[11px] font-serif font-bold tracking-[0.2em] uppercase text-[#73180e]">
-                GLORIA
+                SCORE
               </span>
               <span
                 className="text-xs sm:text-sm font-mono font-bold text-[#2c1606] tracking-wider"

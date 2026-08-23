@@ -48,7 +48,7 @@ Convención:
 - Intro multicolor de PSYCODELICINSANE.
 - Portada con letras iluminadas, marco dorado y navegación `INICIO / RECUERDOS / DATOS / MAPA`.
 - Códice cartográfico con hitos y citas del Génesis.
-- HUD: mira, brújula, saciedad (`SAC`) y Gloria.
+- HUD: mira, brújula, saciedad (`SAC`) y Score.
 - Sistema de score, recuerdos, estadísticas y descubrimientos.
 - Conejos low-poly estilo PS2 repartidos por el jardín: pastorean, saltan y huyen.
 - Controles de teclado, ratón y pantallas táctiles.

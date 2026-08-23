@@ -9,7 +9,7 @@ Publicada como tag `v3.0.0` y rama `release/v3.0.0`.
 - Portada: cabecera `PSYCODELICINSANE · 2026`, letras iluminadas G/E, marco y adornos dorados.
 - Navegación inferior: INICIO, RECUERDOS, DATOS, MAPA.
 - Códice cartográfico a pantalla completa con hitos sagrados.
-- HUD: mira semitransparente, brújula, saciedad y Gloria.
+- HUD: mira semitransparente, brújula, saciedad y Score.
 - Estelas de los cuatro ríos y dos santuarios.
 - Flores silvestres, arbustos de bayas, frutales y corriente del río.
 - Lilith: espacio personal, empujones y animación procedural.
