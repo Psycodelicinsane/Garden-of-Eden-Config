@@ -142,137 +142,88 @@ const PAPYRUS_MAP_BG: CSSProperties = {
   border: '3px solid #5a3a18',
 };
 
-/** Esquina de códice: hiedra, acanto y rosetas, simétrica en las 4 esquinas. */
+/** Esquina heráldica: filigrana de acanto en oro, espejada en las 4 esquinas. */
 function FloralCorner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
   const place: CSSProperties = {
-    tl: { top: -10, left: -10, transform: 'none' },
-    tr: { top: -10, right: -10, transform: 'scaleX(-1)' },
-    bl: { bottom: -10, left: -10, transform: 'scaleY(-1)' },
-    br: { bottom: -10, right: -10, transform: 'scale(-1,-1)' },
+    tl: { top: -8, left: -8, transform: 'none' },
+    tr: { top: -8, right: -8, transform: 'scaleX(-1)' },
+    bl: { bottom: -8, left: -8, transform: 'scaleY(-1)' },
+    br: { bottom: -8, right: -8, transform: 'scale(-1,-1)' },
   }[pos];
-  const g = `illum-${pos}`;
+  const g = `flourish-${pos}`;
 
   return (
     <svg
       aria-hidden
-      viewBox="0 0 168 168"
+      viewBox="0 0 140 140"
       className="pointer-events-none"
       style={{
         position: 'absolute',
-        width: 'clamp(92px, 17vw, 148px)',
-        height: 'clamp(92px, 17vw, 148px)',
-        filter: 'drop-shadow(0 2px 2px rgba(20,10,0,0.55)) drop-shadow(0 0 10px rgba(255,200,80,0.4))',
+        width: 'clamp(78px, 13vw, 124px)',
+        height: 'clamp(78px, 13vw, 124px)',
+        filter: 'drop-shadow(0 1px 1px rgba(20,10,0,0.7)) drop-shadow(0 0 8px rgba(255,210,90,0.35))',
         ...place,
       }}
     >
       <defs>
-        <linearGradient id={`${g}-gold`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#fff8d0" />
-          <stop offset="35%" stopColor="#ffd56a" />
-          <stop offset="70%" stopColor="#d4a017" />
-          <stop offset="100%" stopColor="#8a5a10" />
+        <linearGradient id={`${g}-g`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#fff6c4" />
+          <stop offset="40%" stopColor="#f0c24a" />
+          <stop offset="100%" stopColor="#9a6410" />
         </linearGradient>
-        <linearGradient id={`${g}-leaf`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#7dba5a" />
-          <stop offset="100%" stopColor="#2f6a28" />
-        </linearGradient>
-        <radialGradient id={`${g}-ruby`} cx="40%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#ff6b4a" />
-          <stop offset="55%" stopColor="#b81c1c" />
-          <stop offset="100%" stopColor="#5a0a0a" />
-        </radialGradient>
-        <radialGradient id={`${g}-sap`} cx="40%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#8ec8ff" />
-          <stop offset="60%" stopColor="#2a5ea8" />
-          <stop offset="100%" stopColor="#102848" />
-        </radialGradient>
       </defs>
 
-      {/* Filete en L del marco */}
-      <path d="M14 14 H96" stroke={`url(#${g}-gold)`} strokeWidth="3.2" strokeLinecap="square" />
-      <path d="M14 14 V96" stroke={`url(#${g}-gold)`} strokeWidth="3.2" strokeLinecap="square" />
-      <path d="M14 20 H78" stroke="#6a1c10" strokeWidth="0.6" opacity="0.45" />
-      <path d="M20 14 V78" stroke="#6a1c10" strokeWidth="0.6" opacity="0.45" />
+      {/* Doble filete en L */}
+      <path d="M16 16 H88" stroke={`url(#${g}-g)`} strokeWidth="2.4" strokeLinecap="square" />
+      <path d="M16 16 V88" stroke={`url(#${g}-g)`} strokeWidth="2.4" strokeLinecap="square" />
+      <path d="M16 22 H72" stroke="#ffe9a0" strokeWidth="0.55" opacity="0.55" />
+      <path d="M22 16 V72" stroke="#ffe9a0" strokeWidth="0.55" opacity="0.55" />
 
-      {/* Tallo de hiedra (eje horizontal) */}
+      {/* Tallo principal horizontal, con voluta */}
       <path
-        d="M28 36 C52 22 86 24 132 38 C110 46 74 48 42 42"
+        d="M30 34 C52 20 78 18 108 28 C120 32 126 42 118 50 C110 58 96 52 92 42 C88 32 98 26 108 30"
         fill="none"
-        stroke={`url(#${g}-gold)`}
-        strokeWidth="2.1"
+        stroke={`url(#${g}-g)`}
+        strokeWidth="1.7"
         strokeLinecap="round"
       />
-      {/* Tallo de hiedra (eje vertical, espejo) */}
+      {/* Tallo principal vertical (espejo) */}
       <path
-        d="M36 28 C22 52 24 86 38 132 C46 110 48 74 42 42"
+        d="M34 30 C20 52 18 78 28 108 C32 120 42 126 50 118 C58 110 52 96 42 92 C32 88 26 98 30 108"
         fill="none"
-        stroke={`url(#${g}-gold)`}
-        strokeWidth="2.1"
+        stroke={`url(#${g}-g)`}
+        strokeWidth="1.7"
         strokeLinecap="round"
       />
 
-      {/* Hojas de hiedra — brazo derecho */}
-      <path d="M46 28 C58 12 78 16 84 28 C72 32 56 34 46 28Z" fill={`url(#${g}-leaf)`} stroke="#1e3a14" strokeWidth="0.55" />
-      <path d="M78 32 C94 18 114 26 116 40 C100 40 86 38 78 32Z" fill={`url(#${g}-leaf)`} stroke="#1e3a14" strokeWidth="0.55" />
-      <path d="M108 36 C124 24 142 34 140 48 C126 46 114 42 108 36Z" fill={`url(#${g}-gold)`} stroke="#4a2a06" strokeWidth="0.5" />
-      {/* Hojas de hiedra — brazo inferior (espejo) */}
-      <path d="M28 46 C12 58 16 78 28 84 C32 72 34 56 28 46Z" fill={`url(#${g}-leaf)`} stroke="#1e3a14" strokeWidth="0.55" />
-      <path d="M32 78 C18 94 26 114 40 116 C40 100 38 86 32 78Z" fill={`url(#${g}-leaf)`} stroke="#1e3a14" strokeWidth="0.55" />
-      <path d="M36 108 C24 124 34 142 48 140 C46 126 42 114 36 108Z" fill={`url(#${g}-gold)`} stroke="#4a2a06" strokeWidth="0.5" />
+      {/* Hojas de acanto — horizontales */}
+      <path d="M48 26 C56 14 72 16 76 26 C66 28 56 30 48 26Z" fill={`url(#${g}-g)`} />
+      <path d="M70 30 C82 18 98 22 100 34 C88 34 78 34 70 30Z" fill={`url(#${g}-g)`} opacity="0.9" />
+      {/* Hojas de acanto — verticales */}
+      <path d="M26 48 C14 56 16 72 26 76 C28 66 30 56 26 48Z" fill={`url(#${g}-g)`} />
+      <path d="M30 70 C18 82 22 98 34 100 C34 88 34 78 30 70Z" fill={`url(#${g}-g)`} opacity="0.9" />
 
-      {/* Volutas de acanto en el recodo */}
-      <path
-        d="M40 40 C58 18 92 20 108 40 C92 48 70 50 50 46 C44 56 42 70 48 86 C40 72 36 56 40 40Z"
-        fill={`url(#${g}-gold)`}
-        stroke="#4a2a06"
-        strokeWidth="0.65"
-        opacity="0.92"
-      />
-      <path
-        d="M40 40 C18 58 20 92 40 108 C48 92 50 70 46 50 C56 44 70 42 86 48 C72 40 56 36 40 40Z"
-        fill={`url(#${g}-gold)`}
-        stroke="#4a2a06"
-        strokeWidth="0.65"
-        opacity="0.92"
-      />
-
-      {/* Zarcillos finos */}
-      <path d="M90 44 C108 36 128 42 146 56" fill="none" stroke="#ffd875" strokeWidth="1.15" strokeLinecap="round" />
-      <path d="M44 90 C36 108 42 128 56 146" fill="none" stroke="#ffd875" strokeWidth="1.15" strokeLinecap="round" />
-      <path d="M146 56 C150 62 148 70 142 72" fill="none" stroke="#ffd875" strokeWidth="1" strokeLinecap="round" />
-      <path d="M56 146 C62 150 70 148 72 142" fill="none" stroke="#ffd875" strokeWidth="1" strokeLinecap="round" />
-
-      {/* Florones de 4 pétalos (libro de horas) */}
-      <g transform="translate(96 28)">
-        <ellipse rx="5.2" ry="3.1" fill={`url(#${g}-ruby)`} />
-        <ellipse rx="5.2" ry="3.1" transform="rotate(90)" fill={`url(#${g}-ruby)`} />
-        <circle r="1.7" fill="#fff3c0" />
+      {/* Lis / flor de 3 pétalos al final de cada brazo */}
+      <g transform="translate(118 38)">
+        <path d="M0 6 C-4 -2 0 -8 0 -2 C0 -8 4 -2 0 6Z" fill={`url(#${g}-g)`} />
+        <path d="M0 6 C-8 2 -6 -2 -1 2" fill={`url(#${g}-g)`} />
+        <path d="M0 6 C8 2 6 -2 1 2" fill={`url(#${g}-g)`} />
+        <circle cy="6.5" r="1.4" fill="#fff4c8" />
       </g>
-      <g transform="translate(28 96)">
-        <ellipse rx="5.2" ry="3.1" fill={`url(#${g}-ruby)`} />
-        <ellipse rx="5.2" ry="3.1" transform="rotate(90)" fill={`url(#${g}-ruby)`} />
-        <circle r="1.7" fill="#fff3c0" />
-      </g>
-      <g transform="translate(128 48)">
-        <ellipse rx="4.2" ry="2.5" fill={`url(#${g}-sap)`} />
-        <ellipse rx="4.2" ry="2.5" transform="rotate(90)" fill={`url(#${g}-sap)`} />
-        <circle r="1.4" fill="#ffe9a0" />
-      </g>
-      <g transform="translate(48 128)">
-        <ellipse rx="4.2" ry="2.5" fill={`url(#${g}-sap)`} />
-        <ellipse rx="4.2" ry="2.5" transform="rotate(90)" fill={`url(#${g}-sap)`} />
-        <circle r="1.4" fill="#ffe9a0" />
+      <g transform="translate(38 118) rotate(90)">
+        <path d="M0 6 C-4 -2 0 -8 0 -2 C0 -8 4 -2 0 6Z" fill={`url(#${g}-g)`} />
+        <path d="M0 6 C-8 2 -6 -2 -1 2" fill={`url(#${g}-g)`} />
+        <path d="M0 6 C8 2 6 -2 1 2" fill={`url(#${g}-g)`} />
+        <circle cy="6.5" r="1.4" fill="#fff4c8" />
       </g>
 
       {/* Rosetón del vértice */}
-      <circle cx="18" cy="18" r="11.5" fill={`url(#${g}-gold)`} stroke="#3d2208" strokeWidth="1.2" />
-      <circle cx="18" cy="18" r="7.4" fill="none" stroke="#fff6c8" strokeWidth="0.7" opacity="0.7" />
-      <g transform="translate(18 18)">
-        <ellipse rx="5.6" ry="2.6" fill={`url(#${g}-ruby)`} />
-        <ellipse rx="5.6" ry="2.6" transform="rotate(45)" fill={`url(#${g}-ruby)`} />
-        <ellipse rx="5.6" ry="2.6" transform="rotate(90)" fill={`url(#${g}-ruby)`} />
-        <ellipse rx="5.6" ry="2.6" transform="rotate(135)" fill={`url(#${g}-ruby)`} />
-        <circle r="2.2" fill="#fff8d4" stroke="#6a140c" strokeWidth="0.5" />
+      <circle cx="16" cy="16" r="9.5" fill={`url(#${g}-g)`} stroke="#4a2a08" strokeWidth="0.9" />
+      <circle cx="16" cy="16" r="5.6" fill="none" stroke="#fff6c8" strokeWidth="0.6" />
+      <g transform="translate(16 16)">
+        <path d="M0 -5.2 C1.6 -2 1.6 2 0 5.2 C-1.6 2 -1.6 -2 0 -5.2Z" fill="#8e1e12" />
+        <path d="M0 -5.2 C1.6 -2 1.6 2 0 5.2 C-1.6 2 -1.6 -2 0 -5.2Z" fill="#8e1e12" transform="rotate(90)" />
+        <circle r="1.8" fill="#fff6c8" />
       </g>
     </svg>
   );

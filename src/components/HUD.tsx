@@ -214,7 +214,7 @@ export default function HUD({
           <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center">
             {/* Brújula sin fondo oscuro, solo puntos cardinales flotantes */}
             <div
-              className="relative px-4 pt-1 pb-4 flex items-center gap-5 text-xs"
+              className="relative px-4 py-1 flex items-center gap-5 text-xs"
               style={{ minWidth: 240, justifyContent: 'center' }}
             >
               {COMPASS_POINTS.map((pt, i) => {
@@ -227,7 +227,7 @@ export default function HUD({
                 return (
                   <span
                     key={i}
-                    className={`relative z-10 font-serif transition-all ${
+                    className={`font-serif transition-all ${
                       isCenter
                         ? 'text-amber-200 font-bold scale-125 drop-shadow-[0_0_10px_rgba(255,215,100,0.95)]'
                         : pt.major
@@ -242,10 +242,10 @@ export default function HUD({
 
               {Math.abs(treeRelAngle) < 80 && (
                 <div
-                  className="absolute bottom-0 text-[11px] pointer-events-none"
+                  className="absolute top-1/2 z-20 text-sm pointer-events-none"
                   style={{
                     left: `calc(50% + ${(treeRelAngle / 80) * 108}px)`,
-                    transform: 'translateX(-50%)',
+                    transform: 'translate(-50%, -50%)',
                     filter: 'drop-shadow(0 0 6px rgba(110, 231, 183, 0.95))',
                   }}
                   title={`Árbol del Conocimiento (${distToTree}m)`}
