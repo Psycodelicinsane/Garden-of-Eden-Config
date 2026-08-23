@@ -7,7 +7,9 @@ import {
 } from './interactionTarget';
 import { EdenRabbits } from './rabbits';
 import {
+  BERRY_BUSH_COUNT,
   EDEN_LANDMARKS,
+  FOREST_TREE_COUNT,
   RIVER_HALF_WIDTH,
   isFruitTreeIndex,
   isMountainCore,
@@ -821,7 +823,7 @@ export class GameEngine {
     this.createTerrain();
     this.createRiver();
     this.createAppleTree();
-    this.createForest(240);
+    this.createForest(FOREST_TREE_COUNT);
     this.createFlora();
     this.createDiscoverables();
     this.createButterflies(11);
@@ -1126,7 +1128,7 @@ export class GameEngine {
 
       // El bosque denso forma un cinturón exterior. Los frutales sí aparecen
       // dentro del jardín, pero dejan libre el claro del Árbol del Conocimiento.
-      if (d < (isFruitTree ? 42 : 190)) continue;
+      if (d < (isFruitTree ? 34 : 190)) continue;
       if (Math.abs(z - this.riverCenterZ(x)) < 28) continue;
       // Las cumbres quedan despejadas para que las montañas se lean a distancia.
       if (isMountainCore(x, z)) continue;
@@ -1135,7 +1137,7 @@ export class GameEngine {
       const tree = new THREE.Group();
       tree.position.set(x, y, z);
 
-      // Cada cuarto árbol es frutal: 60 de los 240 árboles totales.
+      // Cada tercer árbol es frutal: 100 de los 300 árboles totales.
       const s = 0.75 + this.rand() * 0.85;
 
       if (isFruitTree) {
@@ -1266,12 +1268,16 @@ export class GameEngine {
     // ── ARBUSTOS DE BAYAS ── recolectables, con los frutos sobre el follaje
     const bushLeafMat = new THREE.MeshLambertMaterial({ map: this.leafTex!, color: 0x7ab648, flatShading: true });
     const berryColors = [0x8e2f5e, 0xc0304a, 0x4b3fa8, 0xd2542c];
-    for (let i = 0; i < 34; i++) {
-      const x = this.rand() * 420 - 210;
-      const z = this.rand() * 420 - 210;
+    let bushesPlaced = 0;
+    let bushGuard = 0;
+    while (bushesPlaced < BERRY_BUSH_COUNT && bushGuard < BERRY_BUSH_COUNT * 40) {
+      bushGuard++;
+      const x = this.rand() * 520 - 260;
+      const z = this.rand() * 520 - 260;
       const d = Math.sqrt(x * x + z * z);
       if (d < 12) continue;
       if (Math.abs(z - this.riverCenterZ(x)) < 18) continue;
+      if (isMountainCore(x, z)) continue;
       const y = this.getTerrainHeight(x, z);
 
       const bush = new THREE.Group();
@@ -1319,6 +1325,7 @@ export class GameEngine {
 
       this.scene.add(bush);
       this.harvestables.push(bush);
+      bushesPlaced++;
     }
 
     // Rocas suaves — solo las grandes colisionan
@@ -2759,6 +2766,7 @@ export class GameEngine {
         this.updateRiver(this.elapsedTotal);
         this.updateClouds(this.elapsedTotal);
         this.updateLilith(delta);
+        this.rabbits?.update(delta, this.elapsedTotal, this.playerPosition.x, this.playerPosition.z);
         this.updateSky();
       }
       this.renderer.render(this.scene, this.camera);

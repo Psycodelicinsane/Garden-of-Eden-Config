@@ -109,8 +109,12 @@ export function isMountainCore(x: number, z: number): boolean {
   });
 }
 
+export const FOREST_TREE_COUNT = 300;
+export const BERRY_BUSH_COUNT = 90;
+
+/** Uno de cada tres árboles es frutal: 100 de 300. */
 export function isFruitTreeIndex(index: number): boolean {
-  return index % 4 === 0;
+  return index % 3 === 0;
 }
 
 export const RABBIT_COUNT = 16;

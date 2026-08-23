@@ -41,7 +41,7 @@ Convención:
 
 - Mundo 3D generado con Three.js.
 - Río al norte del claro, con meandros, cauce, orillas y corriente.
-- Bosque de 240 árboles en el cinturón exterior y 60 frutales.
+- Bosque de 300 árboles en el cinturón exterior, 100 frutales y 90 arbustos de bayas.
 - Montañas transitables al oeste, suroeste y sureste.
 - Árbol del Conocimiento con interacciones y cinemática.
 - Lilith con animación, diálogo, colisiones y espacio personal.

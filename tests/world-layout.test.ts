@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  BERRY_BUSH_COUNT,
+  FOREST_TREE_COUNT,
   MOUNTAIN_PEAKS,
   RIVER_PATH,
   isFruitTreeIndex,
@@ -30,8 +32,10 @@ test('las montañas ocupan las zonas laterales sin invadir el claro', () => {
   }
 });
 
-test('uno de cada cuatro árboles es frutal', () => {
-  const fruitTrees = Array.from({ length: 240 }, (_, index) => index)
+test('uno de cada tres árboles es frutal', () => {
+  const fruitTrees = Array.from({ length: FOREST_TREE_COUNT }, (_, index) => index)
     .filter(isFruitTreeIndex);
-  assert.equal(fruitTrees.length, 60);
+  assert.equal(FOREST_TREE_COUNT, 300);
+  assert.equal(fruitTrees.length, 100);
+  assert.equal(BERRY_BUSH_COUNT, 90);
 });
