@@ -24,3 +24,10 @@ Publicada como tag `v2.3.0` y rama `release/v2.3.0`.
 - Lilith y cinemáticas.
 - Controles de escritorio y táctiles.
 - Persistencia en `localStorage`.
+
+## 2.1.0 — 2026-08-21
+
+Publicada como tag `v2.1.0` y rama `release/v2.1.0`.
+
+- Primera entrega jugable del jardín (`add game v2.1`).
+- Experiencia 3D en primera persona con Three.js y React.

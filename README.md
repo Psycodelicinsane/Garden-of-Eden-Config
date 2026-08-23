@@ -20,10 +20,13 @@
 
 ## Versiones y ramas
 
+Colección completa en [Releases](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases) y en [VERSIONS.md](VERSIONS.md).
+
 | Versión | Rama estable | Tag / release | Notas |
 |---|---|---|---|
-| **3.0.0** | `main`, `release/v3.0.0` | `v3.0.0` | Portada iluminada, códice/mapa, HUD, ríos sagrados, Lilith |
-| **2.3.0** | `release/v2.3.0` | `v2.3.0` | Mundo 3D, mapa ilustrado, frutos, cinemáticas, controles táctiles |
+| **3.0.0** | `main`, `release/v3.0.0` | [`v3.0.0`](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v3.0.0) | Portada iluminada, códice/mapa, HUD, ríos sagrados, Lilith |
+| **2.3.0** | `release/v2.3.0` | [`v2.3.0`](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v2.3.0) | Mundo 3D, mapa ilustrado, frutos, cinemáticas, controles táctiles |
+| **2.1.0** | `release/v2.1.0` | [`v2.1.0`](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v2.1.0) | Primera entrega jugable del jardín |
 
 Convención:
 
