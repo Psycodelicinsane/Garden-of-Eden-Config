@@ -10,6 +10,16 @@ export interface MountainPeak {
   radius: number;
 }
 
+export interface EdenLandmark {
+  id: string;
+  name: string;
+  description: string;
+  verse: string;
+  x: number;
+  z: number;
+  type: 'river' | 'sanctuary' | 'mountain';
+}
+
 /**
  * Recorrido del río de oeste a este inspirado en el mapa ilustrado del jardín.
  * +Z representa el norte y queda en la parte superior del mapa.
@@ -68,15 +78,15 @@ export function riverCenterZ(x: number): number {
   return h00 * p1.z + h10 * span * slope1 + h01 * p2.z + h11 * span * slope2;
 }
 
-/** Montañas situadas como en la ilustración: laterales y esquinas del jardín. */
+/** Colinas y montañas suaves en los laterales que permiten contemplar el horizonte. */
 export const MOUNTAIN_PEAKS: readonly MountainPeak[] = [
-  { x: -380, z: 30, height: 46, radius: 105 },
-  { x: -350, z: -305, height: 54, radius: 120 },
-  { x: 345, z: -300, height: 58, radius: 125 },
-  { x: 405, z: -75, height: 38, radius: 95 },
+  { x: -380, z: 30, height: 14, radius: 140 },
+  { x: -350, z: -305, height: 18, radius: 160 },
+  { x: 345, z: -300, height: 19, radius: 160 },
+  { x: 405, z: -75, height: 13, radius: 130 },
 ] as const;
 
-/** Altura compacta de las montañas; fuera de su radio no modifica el terreno. */
+/** Altura compacta de las colinas; fuera de su radio no modifica el terreno. */
 export function mountainHeight(x: number, z: number): number {
   let height = 0;
   for (const peak of MOUNTAIN_PEAKS) {
@@ -90,7 +100,7 @@ export function mountainHeight(x: number, z: number): number {
   return height;
 }
 
-/** Reserva las cumbres para que las montañas sean visibles entre el bosque. */
+/** Reserva las cumbres para que las colinas sean visibles entre el bosque. */
 export function isMountainCore(x: number, z: number): boolean {
   return MOUNTAIN_PEAKS.some(peak => {
     const nx = (x - peak.x) / peak.radius;
@@ -102,3 +112,61 @@ export function isMountainCore(x: number, z: number): boolean {
 export function isFruitTreeIndex(index: number): boolean {
   return index % 4 === 0;
 }
+
+/** Hitos de los 4 Ríos del Edén y santuarios históricos (Génesis 2:10-14) */
+export const EDEN_LANDMARKS: readonly EdenLandmark[] = [
+  {
+    id: 'river-pishon',
+    name: 'Pisón (Río de Oro)',
+    description: 'El primer brazo del río que rodea toda la tierra de Havila, donde hay oro.',
+    verse: 'Génesis 2:11',
+    x: -260,
+    z: 236,
+    type: 'river',
+  },
+  {
+    id: 'river-gihon',
+    name: 'Gihón (Río de Manantiales)',
+    description: 'El segundo brazo del río que fecunda la llanura de Cus.',
+    verse: 'Génesis 2:13',
+    x: -90,
+    z: 136,
+    type: 'river',
+  },
+  {
+    id: 'river-hiddekel',
+    name: 'Hidekel (Río Impetuoso)',
+    description: 'El tercer brazo del río que avanza veloz hacia el oriente de Asiria.',
+    verse: 'Génesis 2:14',
+    x: 170,
+    z: 240,
+    type: 'river',
+  },
+  {
+    id: 'river-perat',
+    name: 'Éufrates (Río Fértil)',
+    description: 'El cuarto río de bendición que nutre el gran valle sagrado.',
+    verse: 'Génesis 2:14',
+    x: 335,
+    z: 96,
+    type: 'river',
+  },
+  {
+    id: 'sanctuary-clay',
+    name: 'El Altar del Polvo',
+    description: 'El santuario primitivo donde Dios formó al hombre del polvo de la tierra y sopló en él aliento de vida.',
+    verse: 'Génesis 2:7',
+    x: -38,
+    z: -35,
+    type: 'sanctuary',
+  },
+  {
+    id: 'sanctuary-summit',
+    name: 'Mirador de la Creación',
+    description: 'La cumbre más alta del Edén desde donde se contempla la inmensidad del jardín.',
+    verse: 'Génesis 1:31',
+    x: -350,
+    z: -305,
+    type: 'mountain',
+  },
+] as const;

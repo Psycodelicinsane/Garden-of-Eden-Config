@@ -19,9 +19,13 @@ export default defineConfig({
   // Permite servir el preview de desarrollo bajo cualquier host (entornos de
   // sandbox/preview). No afecta al build de producción.
   server: {
+    host: "0.0.0.0",
+    port: 5173,
     allowedHosts: true,
   },
   preview: {
+    host: "0.0.0.0",
+    port: 5173,
     allowedHosts: true,
   },
 });
