@@ -1,5 +1,7 @@
 # Changelog
 
+Los prototipos **anteriores a 2.1.0** se hicieron en local y no forman parte de esta colección. Ver [AGENTS.md](AGENTS.md).
+
 ## 3.0.0 — 2026-08-23
 
 Publicada como tag `v3.0.0` y rama `release/v3.0.0`.
