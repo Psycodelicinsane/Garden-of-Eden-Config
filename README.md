@@ -1,6 +1,6 @@
 # Garden of Eden
 
-![Versión](https://img.shields.io/badge/versión-2.3.0-d4a72c)
+![Versión](https://img.shields.io/badge/versión-3.0.0-d4a72c)
 ![React](https://img.shields.io/badge/React-19-61dafb)
 ![Three.js](https://img.shields.io/badge/Three.js-0.185-black)
 
@@ -12,23 +12,39 @@
 
 ## Estado del proyecto
 
-- **Versión actual:** `2.3.0`
+- **Versión actual:** `3.0.0` (rama `main`)
+- **Siguiente:** `3.1.0` (en preparación)
 - **Plataformas:** navegador de escritorio y dispositivos táctiles
 - **Persistencia:** `localStorage` del navegador
 - **Build:** aplicación estática con JavaScript y CSS integrados en `dist/index.html`, más los recursos de `dist/images/`
 
-## Características
+## Versiones y ramas
+
+| Versión | Rama estable | Tag / release | Notas |
+|---|---|---|---|
+| **3.0.0** | `main`, `release/v3.0.0` | `v3.0.0` | Portada iluminada, códice/mapa, HUD, ríos sagrados, Lilith |
+| **2.3.0** | `release/v2.3.0` | `v2.3.0` | Mundo 3D, mapa ilustrado, frutos, cinemáticas, controles táctiles |
+
+Convención:
+
+- `main` — versión publicada más reciente.
+- `release/vX.Y.Z` — instantánea de esa versión.
+- `arena/…` — ramas de trabajo de sesión; no son versiones.
+
+## Características (v3.0.0)
 
 - Mundo 3D generado con Three.js.
-- Río al norte del claro, con grandes meandros, cauce, orillas y corriente.
-- Bosque de 240 árboles concentrado en el cinturón exterior, con 60 frutales repartidos por el jardín.
-- Montañas transitables en el oeste, suroeste y sureste, siguiendo el mapa ilustrado.
-- Árbol del Conocimiento con interacciones y cinemática propia.
-- Lilith como personaje dinámico, con animación, diálogo, colisiones y anatomía articulada.
+- Río al norte del claro, con meandros, cauce, orillas y corriente.
+- Bosque de 240 árboles en el cinturón exterior y 60 frutales.
+- Montañas transitables al oeste, suroeste y sureste.
+- Árbol del Conocimiento con interacciones y cinemática.
+- Lilith con animación, diálogo, colisiones y espacio personal.
 - Intro multicolor de PSYCODELICINSANE.
-- Portada, mapa y menú de pausa con estilo dorado.
-- Sistema de score, saciedad, recuerdos, estadísticas y descubrimientos.
-- Controles adaptados a teclado, ratón y pantallas táctiles.
+- Portada con letras iluminadas, marco dorado y navegación `INICIO / RECUERDOS / DATOS / MAPA`.
+- Códice cartográfico con hitos y citas del Génesis.
+- HUD: mira, brújula, saciedad (`SAC`) y Gloria.
+- Sistema de score, recuerdos, estadísticas y descubrimientos.
+- Controles de teclado, ratón y pantallas táctiles.
 
 ## Requisitos
 
@@ -108,6 +124,7 @@ Para reiniciar completamente el progreso, elimina la clave `edenRegistry` del al
 │   ├── App.tsx                 # Estado principal y conexión React/motor
 │   ├── index.css               # Estilos globales
 │   └── main.tsx                # Entrada de React
+├── CHANGELOG.md                # Historial de versiones
 ├── tests/                      # Pruebas automatizadas de regresión
 ├── vite.config.ts              # Configuración de Vite e integración de JS/CSS
 └── package.json
