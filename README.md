@@ -128,6 +128,7 @@ Para reiniciar completamente el progreso, elimina la clave `edenRegistry` del al
 │   ├── index.css               # Estilos globales
 │   └── main.tsx                # Entrada de React
 ├── CHANGELOG.md                # Historial de versiones
+├── VERSIONS.md                 # Colección de entregas publicadas
 ├── tests/                      # Pruebas automatizadas de regresión
 ├── vite.config.ts              # Configuración de Vite e integración de JS/CSS
 └── package.json
