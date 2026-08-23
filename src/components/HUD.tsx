@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useId, useMemo, useState, useEffect, type ReactNode } from 'react';
 import { EDEN_LANDMARKS } from '../game/worldLayout';
 
 interface HUDProps {
@@ -13,6 +13,75 @@ interface HUDProps {
   onInspect: () => void;
   showControls: boolean;
   showExploreHint: boolean;
+}
+
+/** Banderín medieval con dos puntas (colas de golondrina) a cada lado. */
+function HeraldicPennant({
+  children,
+  onClick,
+  className = '',
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  className?: string;
+}) {
+  const Tag = onClick ? 'button' : 'div';
+  const fillId = `pennantFill-${useId().replace(/:/g, '')}`;
+  return (
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`group relative isolate block ${onClick ? 'cursor-pointer active:scale-95 hover:scale-[1.03] transition-transform' : ''} ${className}`}
+      style={{ filter: 'drop-shadow(0 5px 10px rgba(0,0,0,0.55))' }}
+    >
+      <svg
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 240 58"
+        preserveAspectRatio="none"
+        aria-hidden
+      >
+        <defs>
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fffdf7" />
+            <stop offset="35%" stopColor="#f8eccf" />
+            <stop offset="75%" stopColor="#edd7ad" />
+            <stop offset="100%" stopColor="#c9a36a" />
+          </linearGradient>
+        </defs>
+        {/* Dos puntas a la izquierda y dos a la derecha */}
+        <path
+          d="M22 4
+             H218
+             L236 13 L214 20.5 L236 29 L214 37.5 L236 46
+             L218 54
+             H22
+             L4 46 L26 37.5 L4 29 L26 20.5 L4 13
+             Z"
+          fill="url(#pennantFill)"
+          stroke="#5a3814"
+          strokeWidth="2.4"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M28 9
+             H212
+             L226 16 L208 22 L226 29 L208 36 L226 43
+             L212 49
+             H28
+             L14 43 L32 36 L14 29 L32 22 L14 16
+             Z"
+          fill="none"
+          stroke="#7c5828"
+          strokeWidth="0.9"
+          strokeDasharray="3 2.4"
+          opacity="0.55"
+        />
+      </svg>
+      <div className="relative z-10 flex items-center justify-center gap-2 px-7 py-1.5 min-h-[34px]">
+        {children}
+      </div>
+    </Tag>
+  );
 }
 
 const COMPASS_POINTS = [
@@ -114,18 +183,9 @@ export default function HUD({
             </div>
           </div>
 
-          {/* Placa de Score en Papiro (Estilo Botón del Título) */}
+          {/* Banderín de Score */}
           <div className="flex flex-col">
-            <div
-              className="relative px-4 py-1.5 rounded-xs flex items-center gap-2 shadow-xl"
-              style={{
-                background: 'linear-gradient(180deg, #fffdf7 0%, #f8eccf 35%, #edd7ad 75%, #dbbe8a 100%)',
-                border: '2px solid #5a3814',
-                outline: '1px dashed rgba(120, 75, 25, 0.45)',
-                outlineOffset: '-3.5px',
-                boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 0 10px rgba(180, 130, 60, 0.2)',
-              }}
-            >
+            <HeraldicPennant>
               <span className="text-[11px] font-serif font-bold tracking-[0.2em] uppercase text-[#73180e]">
                 SCORE
               </span>
@@ -135,7 +195,7 @@ export default function HUD({
               >
                 {score.toString().padStart(6, '0')}
               </span>
-            </div>
+            </HeraldicPennant>
 
             {closestLandmark && (
               <span
