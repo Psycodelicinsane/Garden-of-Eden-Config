@@ -113,6 +113,40 @@ export function isFruitTreeIndex(index: number): boolean {
   return index % 4 === 0;
 }
 
+export const RABBIT_COUNT = 16;
+
+function rabbitRand(seed: { n: number }) {
+  seed.n = (seed.n * 16807) % 2147483647;
+  return (seed.n - 1) / 2147483646;
+}
+
+/** Posiciones fijas de los conejos: lejos del árbol, del río y de las cumbres. */
+export function pickRabbitSpawns(
+  count: number,
+  isBlocked: (x: number, z: number) => boolean,
+): Array<{ x: number; z: number; coat: number; heading: number }> {
+  const seed = { n: 91 };
+  const out: Array<{ x: number; z: number; coat: number; heading: number }> = [];
+  let guard = 0;
+  while (out.length < count && guard < count * 80) {
+    guard++;
+    const x = rabbitRand(seed) * 520 - 260;
+    const z = rabbitRand(seed) * 520 - 260;
+    const d = Math.hypot(x, z);
+    if (d < 28) continue;
+    if (Math.abs(z - riverCenterZ(x)) < 22) continue;
+    if (isMountainCore(x, z)) continue;
+    if (isBlocked(x, z)) continue;
+    out.push({
+      x,
+      z,
+      coat: Math.floor(rabbitRand(seed) * 5),
+      heading: rabbitRand(seed) * Math.PI * 2,
+    });
+  }
+  return out;
+}
+
 /** Hitos de los 4 Ríos del Edén y santuarios históricos (Génesis 2:10-14) */
 export const EDEN_LANDMARKS: readonly EdenLandmark[] = [
   {

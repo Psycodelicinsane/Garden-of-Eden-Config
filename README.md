@@ -50,6 +50,7 @@ Convención:
 - Códice cartográfico con hitos y citas del Génesis.
 - HUD: mira, brújula, saciedad (`SAC`) y Gloria.
 - Sistema de score, recuerdos, estadísticas y descubrimientos.
+- Conejos low-poly estilo PS2 repartidos por el jardín: pastorean, saltan y huyen.
 - Controles de teclado, ratón y pantallas táctiles.
 
 ## Requisitos

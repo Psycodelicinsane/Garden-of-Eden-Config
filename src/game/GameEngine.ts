@@ -5,6 +5,7 @@ import {
   LILITH_SHOVE_DISTANCE_SQ,
   chooseInteractionTarget,
 } from './interactionTarget';
+import { EdenRabbits } from './rabbits';
 import {
   EDEN_LANDMARKS,
   RIVER_HALF_WIDTH,
@@ -430,6 +431,8 @@ export class GameEngine {
   private lastPos = new THREE.Vector3();
   private regenTick = 0;
 
+  private rabbits: EdenRabbits | null = null;
+
   // Mariposas
   private butterflies: Array<{
     group: THREE.Group;
@@ -538,6 +541,7 @@ export class GameEngine {
       this.camera.lookAt(0, 7, 0);
       this.animateApples(t);
       this.updateButterflies(t);
+      this.rabbits?.update(1 / 60, t, this.camera.position.x, this.camera.position.z);
       this.updateRiver(t);
       this.updateClouds(t);
       this.updateSky();
@@ -824,6 +828,15 @@ export class GameEngine {
     this.createClouds(9);
     this.createLandmarks();
     this.buildLilith();
+    this.rabbits = new EdenRabbits(
+      this.scene,
+      (x, z) => this.getTerrainHeight(x, z),
+      (x, z) => this.collisionBodies.some(b => {
+        const dx = x - b.x;
+        const dz = z - b.z;
+        return dx * dx + dz * dz < (b.radius + 1.2) * (b.radius + 1.2);
+      }),
+    );
   }
 
   private createLights() {
@@ -2567,6 +2580,11 @@ export class GameEngine {
         z = lz + (dz / d) * r;
       }
     }
+    if (this.rabbits) {
+      const r = this.rabbits.resolvePlayer(x, z, this.playerRadius);
+      x = r.x;
+      z = r.z;
+    }
     return { x, z };
   }
 
@@ -3074,6 +3092,19 @@ export class GameEngine {
       }
     }
 
+    if (!prompt && this.rabbits) {
+      const near = this.rabbits.nearest(this.playerPosition.x, this.playerPosition.z);
+      if (near && near.dist < 5.2) {
+        const rp = near.rabbit.root.position;
+        const toR = new THREE.Vector3(rp.x, rp.y + 0.2, rp.z).sub(this.camera.position);
+        const distR = toR.length();
+        toR.normalize();
+        if (distR < 5.2 && camDir.dot(toR) > 0.88) {
+          prompt = 'Conejo del Edén';
+        }
+      }
+    }
+
     if (prompt !== this.lastPrompt) {
       this.lastPrompt = prompt;
       this.callbacks.onPromptUpdate?.(prompt);
@@ -3518,6 +3549,23 @@ export class GameEngine {
           localStorage.setItem('edenRegistry', JSON.stringify(reg));
         } catch { /* empty */ }
         return;
+      }
+    }
+
+    // 3b. Observar un conejo (solo si está cerca y delante)
+    if (this.rabbits) {
+      const near = this.rabbits.nearest(this.playerPosition.x, this.playerPosition.z);
+      if (near && near.dist < 4.2) {
+        const toX = near.rabbit.root.position.x - this.playerPosition.x;
+        const toZ = near.rabbit.root.position.z - this.playerPosition.z;
+        const facing = near.dist > 0.001
+          ? (forwardX * toX + forwardZ * toZ) / near.dist
+          : 1;
+        if (facing > 0.45 && this.elapsedTotal - this.lastAdamThoughtAt >= 2.2) {
+          this.lastAdamThoughtAt = this.elapsedTotal;
+          this.callbacks.onAdamThought?.('Un conejo del jardín. Salta entre la hierba y huye si me acerco.');
+          return;
+        }
       }
     }
 
