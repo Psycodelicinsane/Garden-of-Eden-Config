@@ -169,7 +169,14 @@ export default function HUD({
           {/* Pergamino de Score */}
           <div className="flex flex-col">
             <ScoreParchment>
-              <span className="text-[11px] font-serif font-bold tracking-[0.2em] uppercase text-[#73180e]">
+              <span
+                className="text-[12px] font-serif font-black tracking-[0.2em] uppercase"
+                style={{
+                  color: '#d40f0f',
+                  textShadow: '0 1px 0 #fff4d6, 0 0 1px #5a0808',
+                  WebkitTextStroke: '0.35px #6a0a0a',
+                }}
+              >
                 SCORE
               </span>
               <span

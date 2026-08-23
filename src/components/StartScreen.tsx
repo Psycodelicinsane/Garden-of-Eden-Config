@@ -130,7 +130,6 @@ const GOLD_TEXT: CSSProperties = {
 
 const FRAME_BORDER = '2px solid rgba(224,190,120,0.75)';
 const FRAME_OUTLINE = '1px solid rgba(224,190,120,0.35)';
-const CORNER = '#ffd166';
 
 // Textura de papiro / pergamino antiguo de lujo
 const PAPYRUS_MAP_BG: CSSProperties = {
@@ -143,22 +142,93 @@ const PAPYRUS_MAP_BG: CSSProperties = {
   border: '3px solid #5a3a18',
 };
 
-function FrameCorner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
-  const s: CSSProperties = {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderColor: CORNER,
-    borderStyle: 'solid',
-    borderWidth: 0,
-    filter: 'drop-shadow(0 0 6px rgba(255,200,90,0.55))',
-    opacity: 0.9,
-  };
-  if (pos === 'tl') { s.top = -9; s.left = -9; s.borderTopWidth = 3; s.borderLeftWidth = 3; }
-  if (pos === 'tr') { s.top = -9; s.right = -9; s.borderTopWidth = 3; s.borderRightWidth = 3; }
-  if (pos === 'bl') { s.bottom = -9; s.left = -9; s.borderBottomWidth = 3; s.borderLeftWidth = 3; }
-  if (pos === 'br') { s.bottom = -9; s.right = -9; s.borderBottomWidth = 3; s.borderRightWidth = 3; }
-  return <span aria-hidden style={s} />;
+/** Motivo floral iluminado: se espeja en las 4 esquinas. */
+function FloralCorner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
+  const flip: CSSProperties = {
+    tl: { top: -6, left: -6, transform: 'none' },
+    tr: { top: -6, right: -6, transform: 'scaleX(-1)' },
+    bl: { bottom: -6, left: -6, transform: 'scaleY(-1)' },
+    br: { bottom: -6, right: -6, transform: 'scale(-1)' },
+  }[pos];
+
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 120 120"
+      className="pointer-events-none"
+      style={{
+        position: 'absolute',
+        width: 'clamp(72px, 14vw, 118px)',
+        height: 'clamp(72px, 14vw, 118px)',
+        filter: 'drop-shadow(0 0 8px rgba(255,200,90,0.45))',
+        opacity: 0.95,
+        ...flip,
+      }}
+    >
+      <defs>
+        <linearGradient id={`floralGold-${pos}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#fff6c8" />
+          <stop offset="45%" stopColor="#f0c24a" />
+          <stop offset="100%" stopColor="#a86a12" />
+        </linearGradient>
+      </defs>
+      {/* Marco en L */}
+      <path
+        d="M8 8 H78 M8 8 V78"
+        stroke={`url(#floralGold-${pos})`}
+        strokeWidth="2.6"
+        strokeLinecap="square"
+      />
+      <path
+        d="M8 8 H52 M8 8 V52"
+        stroke="#7a1a10"
+        strokeWidth="0.7"
+        opacity="0.55"
+      />
+      {/* Acanto horizontal */}
+      <path
+        d="M18 22 C34 8 58 10 86 18 C70 26 48 28 28 24"
+        fill={`url(#floralGold-${pos})`}
+        stroke="#4a2a06"
+        strokeWidth="0.7"
+      />
+      <path
+        d="M26 30 C44 16 72 18 98 30 C80 36 52 36 32 32"
+        fill="none"
+        stroke="#ffd875"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      {/* Acanto vertical */}
+      <path
+        d="M22 18 C8 34 10 58 18 86 C26 70 28 48 24 28"
+        fill={`url(#floralGold-${pos})`}
+        stroke="#4a2a06"
+        strokeWidth="0.7"
+      />
+      <path
+        d="M30 26 C16 44 18 72 30 98 C36 80 36 52 32 32"
+        fill="none"
+        stroke="#ffd875"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      {/* Hojas */}
+      <path d="M48 16 C58 6 74 10 78 20 C66 22 56 22 48 16Z" fill="#c9a227" stroke="#4a2a06" strokeWidth="0.6" />
+      <path d="M16 48 C6 58 10 74 20 78 C22 66 22 56 16 48Z" fill="#c9a227" stroke="#4a2a06" strokeWidth="0.6" />
+      <path d="M62 28 C76 22 86 34 80 44 C70 38 64 34 62 28Z" fill="#e8c14a" stroke="#4a2a06" strokeWidth="0.55" />
+      <path d="M28 62 C22 76 34 86 44 80 C38 70 34 64 28 62Z" fill="#e8c14a" stroke="#4a2a06" strokeWidth="0.55" />
+      {/* Rosetas y rubíes */}
+      <circle cx="18" cy="18" r="6.2" fill={`url(#floralGold-${pos})`} stroke="#4a2a06" strokeWidth="1.1" />
+      <circle cx="18" cy="18" r="2.4" fill="#8e1e12" stroke="#fff1c2" strokeWidth="0.6" />
+      <circle cx="54" cy="20" r="4.2" fill="#f5c34a" stroke="#4a2a06" strokeWidth="0.8" />
+      <circle cx="20" cy="54" r="4.2" fill="#f5c34a" stroke="#4a2a06" strokeWidth="0.8" />
+      <circle cx="72" cy="34" r="3.2" fill="#b81f14" stroke="#ffd875" strokeWidth="0.6" />
+      <circle cx="34" cy="72" r="3.2" fill="#b81f14" stroke="#ffd875" strokeWidth="0.6" />
+      <circle cx="88" cy="22" r="2.2" fill="#fff6c8" />
+      <circle cx="22" cy="88" r="2.2" fill="#fff6c8" />
+    </svg>
+  );
 }
 
 function readRegistry(): Registry {
@@ -341,10 +411,10 @@ export default function StartScreen({ onStart }: Props) {
           boxShadow: 'inset 0 0 90px rgba(0,0,0,0.55)',
         }}
       >
-        <FrameCorner pos="tl" />
-        <FrameCorner pos="tr" />
-        <FrameCorner pos="bl" />
-        <FrameCorner pos="br" />
+        <FloralCorner pos="tl" />
+        <FloralCorner pos="tr" />
+        <FloralCorner pos="bl" />
+        <FloralCorner pos="br" />
       </div>
 
       {/* ── CABECERA SUPERIOR: PSYCODELICINSANE · 2026 (Todo seguido y centrado arriba) ── */}
