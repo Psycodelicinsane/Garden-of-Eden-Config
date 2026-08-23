@@ -6,12 +6,22 @@ import {
   chooseInteractionTarget,
 } from './interactionTarget';
 import {
+  EDEN_LANDMARKS,
   RIVER_HALF_WIDTH,
   isFruitTreeIndex,
   isMountainCore,
   mountainHeight,
   riverCenterZ,
 } from './worldLayout';
+
+interface EdenStele {
+  group: THREE.Group;
+  id: string;
+  name: string;
+  desc: string;
+  verse: string;
+  discovered: boolean;
+}
 
 interface GameCallbacks {
   onStateChange: (state: GameState) => void;
@@ -20,6 +30,8 @@ interface GameCallbacks {
   onCinematicUpdate?: (progress: number) => void;
   onForbiddenTree?: () => void;
   onAdamThought?: (text: string) => void;
+  onPromptUpdate?: (prompt: string | null) => void;
+  onCompassUpdate?: (yawDeg: number, playerX: number, playerZ: number) => void;
 }
 
 const RENDER_SCALE = 0.48;
@@ -273,6 +285,11 @@ export class GameEngine {
 
   private keys: Record<string, boolean> = {};
   private mouseMovement = { x: 0, y: 0 };
+  private lastMouseX = 0;
+  private lastMouseY = 0;
+  private mouseDown = false;
+  private lastPrompt: string | null = null;
+  private steles: EdenStele[] = [];
   private touchStart: { x: number; y: number } | null = null;
   private joystickActive = false;
   private joystickDelta = { x: 0, y: 0 };
@@ -545,6 +562,13 @@ export class GameEngine {
   }
 
   skipCinematic() {
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+    this.paused = false;
+    this.forbiddenCinematicActive = false;
+
     const groundH = Math.max(this.getTerrainHeight(0, -20), 0);
     const standY = this.playerHeight + groundH;
     this.playerPosition.set(0, standY, -20);
@@ -563,7 +587,7 @@ export class GameEngine {
     this.cinematicTime = this.cinematicDuration + 1;
     this.state = 'playing';
     this.clock.start();
-    if (!this.animationId) this.animate();
+    this.animate();
     this.callbacks.onStateChange('playing');
   }
 
@@ -798,6 +822,7 @@ export class GameEngine {
     this.createDiscoverables();
     this.createButterflies(11);
     this.createClouds(9);
+    this.createLandmarks();
     this.buildLilith();
   }
 
@@ -1435,6 +1460,83 @@ export class GameEngine {
       c.mesh.position.z = c.baseZ + Math.sin(t * 0.05 + c.phase) * c.drift;
       c.mesh.position.y = c.altitude + Math.sin(t * 0.11 + c.phase) * 1.2;
     }
+  }
+
+  private createLandmarks() {
+    const steleMat = new THREE.MeshLambertMaterial({ color: 0xb0a898, flatShading: true });
+    const runeMat = new THREE.MeshBasicMaterial({ color: 0xffd166, side: THREE.DoubleSide });
+    const altarEarthMat = new THREE.MeshLambertMaterial({ color: 0x5a3d28 });
+
+    EDEN_LANDMARKS.forEach((lm) => {
+      const group = new THREE.Group();
+      const y = this.getTerrainHeight(lm.x, lm.z);
+      group.position.set(lm.x, y, lm.z);
+
+      if (lm.type === 'sanctuary') {
+        const base = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.5, 1.8), steleMat);
+        base.position.y = 0.25;
+        base.castShadow = true;
+        group.add(base);
+
+        const earthMound = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), altarEarthMat);
+        earthMound.scale.set(1.4, 0.45, 1.1);
+        earthMound.position.y = 0.55;
+        group.add(earthMound);
+
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.6, 0.4), steleMat);
+        pillar.position.set(0, 1.05, -0.6);
+        pillar.castShadow = true;
+        group.add(pillar);
+
+        const rune = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.7), runeMat);
+        rune.position.set(0, 1.1, -0.38);
+        group.add(rune);
+
+        this.collisionBodies.push({ x: lm.x, z: lm.z, radius: 1.2 });
+      } else if (lm.type === 'mountain') {
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.0, 0.6, 8), steleMat);
+        base.position.y = 0.3;
+        base.castShadow = true;
+        group.add(base);
+
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 2.2, 7), steleMat);
+        pillar.position.y = 1.4;
+        pillar.castShadow = true;
+        group.add(pillar);
+
+        const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5, 0), runeMat);
+        crown.position.y = 2.7;
+        group.add(crown);
+
+        this.collisionBodies.push({ x: lm.x, z: lm.z, radius: 1.4 });
+      } else {
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 0.4, 6), steleMat);
+        base.position.y = 0.2;
+        base.castShadow = true;
+        group.add(base);
+
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.0, 0.35), steleMat);
+        pillar.position.y = 1.2;
+        pillar.castShadow = true;
+        group.add(pillar);
+
+        const rune = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.75), runeMat);
+        rune.position.set(0, 1.25, 0.19);
+        group.add(rune);
+
+        this.collisionBodies.push({ x: lm.x, z: lm.z, radius: 0.75 });
+      }
+
+      this.scene.add(group);
+      this.steles.push({
+        group,
+        id: lm.id,
+        name: lm.name,
+        desc: lm.description,
+        verse: lm.verse,
+        discovered: false,
+      });
+    });
   }
 
   private updateRiver(t: number) {
@@ -2491,8 +2593,6 @@ export class GameEngine {
   // INPUT — teclado, mouse con pointer lock y joystick táctil
   // ═══════════════════════════════════════════════════════════════
 
-  private mouseDown = false;
-
   // Referencias estables para poder retirar todos los listeners en dispose().
   // Esto es especialmente importante en React StrictMode, que monta y desmonta
   // el motor dos veces durante el desarrollo.
@@ -2506,8 +2606,10 @@ export class GameEngine {
     this.keys[e.key.toLowerCase()] = false;
   };
 
-  private readonly handleMouseDown = () => {
+  private readonly handleMouseDown = (e: MouseEvent) => {
     this.mouseDown = true;
+    this.lastMouseX = e.clientX;
+    this.lastMouseY = e.clientY;
     if (this.state === 'playing' && !('ontouchstart' in window)) {
       if (document.pointerLockElement !== this.canvas) {
         this.canvas.requestPointerLock?.();
@@ -2522,9 +2624,16 @@ export class GameEngine {
   private readonly handleMouseMove = (e: MouseEvent) => {
     if (this.state !== 'playing') return;
     const locked = document.pointerLockElement === this.canvas;
-    if (locked || this.mouseDown) {
+    if (locked) {
       this.mouseMovement.x += e.movementX;
       this.mouseMovement.y += e.movementY;
+    } else if (this.mouseDown) {
+      const dx = typeof e.movementX === 'number' && e.movementX !== 0 ? e.movementX : (e.clientX - this.lastMouseX);
+      const dy = typeof e.movementY === 'number' && e.movementY !== 0 ? e.movementY : (e.clientY - this.lastMouseY);
+      this.mouseMovement.x += dx;
+      this.mouseMovement.y += dy;
+      this.lastMouseX = e.clientX;
+      this.lastMouseY = e.clientY;
     }
   };
 
@@ -2866,6 +2975,7 @@ export class GameEngine {
     this.checkDiscoveries();
     this.checkInspect();
     this.emitScoreIfChanged();
+    this.updatePromptsAndCompass();
 
     // Regeneración muy lenta de frutos/bayas (tick barato, no cada frame por objeto)
     this.regenTick += delta;
@@ -2894,6 +3004,80 @@ export class GameEngine {
 
     if (this.isSprinting && !this.wasSprinting) this.regSprints++;
     this.wasSprinting = this.isSprinting;
+  }
+
+  private updatePromptsAndCompass() {
+    const yawDeg = ((-this.playerRotation * 180 / Math.PI) % 360 + 360) % 360;
+    this.callbacks.onCompassUpdate?.(yawDeg, this.playerPosition.x, this.playerPosition.z);
+
+    const camDir = new THREE.Vector3();
+    this.camera.getWorldDirection(camDir);
+
+    let prompt: string | null = null;
+
+    // 1. Lilith (requiere apuntar exactamente a su cuerpo en el centro de la pantalla)
+    if (this.lilithGroup) {
+      const lilithChest = new THREE.Vector3(
+        this.lilithGroup.position.x,
+        this.lilithGroup.position.y + 1.1,
+        this.lilithGroup.position.z
+      );
+      const toL = new THREE.Vector3().subVectors(lilithChest, this.camera.position);
+      const distL = toL.length();
+      toL.normalize();
+      const dotL = camDir.dot(toL);
+      if (distL < 6.5 && dotL > 0.94) {
+        prompt = 'Hablar con Lilith';
+      }
+    }
+
+    // 2. Árbol del Conocimiento (requiere estar mirando directamente al tronco/centro)
+    if (!prompt && this.appleTree) {
+      const treePos = new THREE.Vector3(0, 2.5, 0);
+      const toT = new THREE.Vector3().subVectors(treePos, this.camera.position);
+      const distT = toT.length();
+      toT.normalize();
+      const dotT = camDir.dot(toT);
+      if (distT < 7.0 && dotT > 0.88) {
+        prompt = 'Árbol del Conocimiento';
+      }
+    }
+
+    // 3. Hitos de los Cuatro Ríos y Santuarios (requiere mirar directamente a la estela)
+    if (!prompt) {
+      for (const s of this.steles) {
+        const stelePos = new THREE.Vector3(s.group.position.x, s.group.position.y + 1.0, s.group.position.z);
+        const toS = new THREE.Vector3().subVectors(stelePos, this.camera.position);
+        const distS = toS.length();
+        toS.normalize();
+        const dotS = camDir.dot(toS);
+        if (distS < 6.0 && dotS > 0.90) {
+          prompt = s.name;
+          break;
+        }
+      }
+    }
+
+    // 4. Arbustos / Árboles Frutales (requiere mirar directamente al fruto)
+    if (!prompt) {
+      for (const h of this.harvestables) {
+        if (h.userData.harvested) continue;
+        const hPos = new THREE.Vector3(h.position.x, h.position.y + 1.0, h.position.z);
+        const toH = new THREE.Vector3().subVectors(hPos, this.camera.position);
+        const distH = toH.length();
+        toH.normalize();
+        const dotH = camDir.dot(toH);
+        if (distH < 4.8 && dotH > 0.90) {
+          prompt = 'Recolectar Fruto';
+          break;
+        }
+      }
+    }
+
+    if (prompt !== this.lastPrompt) {
+      this.lastPrompt = prompt;
+      this.callbacks.onPromptUpdate?.(prompt);
+    }
   }
 
   saveRegistry() {
@@ -3318,7 +3502,26 @@ export class GameEngine {
       return;
     }
 
-    // 3. Recolección normal de frutas
+    // 3. Interacción con Hitos de los Cuatro Ríos y Santuarios
+    for (const s of this.steles) {
+      const dx = this.playerPosition.x - s.group.position.x;
+      const dz = this.playerPosition.z - s.group.position.z;
+      if (dx * dx + dz * dz < 30) {
+        s.discovered = true;
+        this.callbacks.onAdamThought?.(`«${s.name}: ${s.desc} (${s.verse})»`);
+        this.score += 5;
+        this.emitScoreIfChanged();
+        try {
+          const reg = JSON.parse(localStorage.getItem('edenRegistry') || '{}');
+          reg[s.id] = true;
+          reg.discoveries = (reg.discoveries || 0) + 1;
+          localStorage.setItem('edenRegistry', JSON.stringify(reg));
+        } catch { /* empty */ }
+        return;
+      }
+    }
+
+    // 4. Recolección normal de frutas
     let closest: THREE.Object3D | null = null;
     let closestDistSq = 25;
     for (const h of this.harvestables) {

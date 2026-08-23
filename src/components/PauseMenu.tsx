@@ -1,89 +1,105 @@
+import type { CSSProperties } from 'react';
+
 interface PauseMenuProps {
   onResume: () => void;
   onExit: () => void;
 }
 
-// Letras doradas elegantes: degradado + borde fino + brillo suave
-const GOLD_TEXT: React.CSSProperties = {
-  backgroundImage: 'linear-gradient(180deg, #fffbe6 0%, #ffe9a8 25%, #f5c34a 50%, #d99a1f 80%, #a8740e 100%)',
-  WebkitBackgroundClip: 'text',
-  backgroundClip: 'text',
-  color: 'transparent',
-  WebkitTextStroke: '1px rgba(58,36,4,0.6)',
-  filter: 'drop-shadow(0 2px 1px rgba(40,24,2,0.85)) drop-shadow(0 0 16px rgba(255,195,80,0.35))',
+const PARCHMENT_BG: CSSProperties = {
+  backgroundColor: '#f7f1e1',
+  backgroundImage: `
+    radial-gradient(ellipse at 50% 50%, rgba(255, 253, 246, 0.98) 0%, rgba(247, 239, 218, 0.95) 70%, rgba(226, 210, 178, 0.97) 100%),
+    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(160, 130, 90, 0.03) 3px, rgba(160, 130, 90, 0.03) 4px)
+  `,
+  boxShadow: '0 25px 80px rgba(0,0,0,0.9), inset 0 0 60px rgba(160, 120, 60, 0.25)',
+  border: '2px solid #5a3a18',
 };
-
-function Corner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
-  const s: React.CSSProperties = {
-    position: 'absolute',
-    width: 30,
-    height: 30,
-    borderColor: '#ffd166',
-    borderStyle: 'solid',
-    borderWidth: 0,
-    filter: 'drop-shadow(0 0 6px rgba(255,200,90,0.55))',
-    opacity: 0.9,
-  };
-  if (pos === 'tl') { s.top = -9; s.left = -9; s.borderTopWidth = 3; s.borderLeftWidth = 3; }
-  if (pos === 'tr') { s.top = -9; s.right = -9; s.borderTopWidth = 3; s.borderRightWidth = 3; }
-  if (pos === 'bl') { s.bottom = -9; s.left = -9; s.borderBottomWidth = 3; s.borderLeftWidth = 3; }
-  if (pos === 'br') { s.bottom = -9; s.right = -9; s.borderBottomWidth = 3; s.borderRightWidth = 3; }
-  return <span aria-hidden style={s} />;
-}
 
 export default function PauseMenu({ onResume, onExit }: PauseMenuProps) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-black/85 z-50">
-      {/* ── MARCO DE PANTALLA ── */}
-      <div className="absolute inset-2 md:inset-4 pointer-events-none"
-           style={{
-             border: '2px solid rgba(224,190,120,0.7)',
-             outline: '1px solid rgba(224,190,120,0.3)',
-             outlineOffset: '5px',
-             boxShadow: 'inset 0 0 90px rgba(0,0,0,0.55)',
-           }}>
-        <Corner pos="tl" />
-        <Corner pos="tr" />
-        <Corner pos="bl" />
-        <Corner pos="br" />
-      </div>
+    <div className="absolute inset-0 flex items-center justify-center bg-black/75 z-50 p-4 select-none backdrop-blur-xs font-serif">
+      <div
+        className="relative w-full max-w-md p-6 sm:p-8 rounded-sm text-center flex flex-col items-center shadow-2xl"
+        style={PARCHMENT_BG}
+      >
+        {/* Filigranas en esquinas */}
+        <span className="absolute top-1.5 left-2 text-xs text-[#6e4e22]">❦</span>
+        <span className="absolute top-1.5 right-2 text-xs text-[#6e4e22]">❦</span>
+        <span className="absolute bottom-1.5 left-2 text-xs text-[#6e4e22]">❦</span>
+        <span className="absolute bottom-1.5 right-2 text-xs text-[#6e4e22]">❦</span>
 
-      <div className="relative text-center px-10 py-10 md:px-16 md:py-12 font-mono">
-        <h2 className="text-4xl md:text-5xl font-bold tracking-widest"
-            style={{
-              fontFamily: 'Georgia, "Palatino Linotype", serif',
-              ...GOLD_TEXT,
-            }}>
-          PAUSED
-        </h2>
+        {/* Título Noble */}
+        <div className="mt-1 mb-2">
+          <span className="text-[10px] font-serif uppercase tracking-[0.35em] text-[#7c5828] italic">
+            — Códice del Génesis —
+          </span>
+          <h2
+            className="text-2xl sm:text-3xl font-serif font-bold tracking-[0.2em] text-[#2c1606] uppercase mt-0.5"
+            style={{ textShadow: '1px 1px 0 rgba(255,255,255,0.9)' }}
+          >
+            MEDITATIO · PAUSA
+          </h2>
+        </div>
 
-        <div className="space-y-4 text-white text-sm mt-9">
+        {/* Cita del Génesis */}
+        <div className="my-2 px-3 border-y border-[#a88a5d]/40 py-3 w-full">
+          <p className="text-xs sm:text-sm font-serif italic text-[#553a1a] leading-relaxed">
+            «Y reposó en el día séptimo de toda la obra que había hecho en la creación del huerto.»
+          </p>
+          <span className="text-[10px] font-serif tracking-widest text-[#7c5828] uppercase mt-1.5 block">
+            — Génesis 2:2 —
+          </span>
+        </div>
+
+        {/* Botones clásicos */}
+        <div className="space-y-3 w-full max-w-xs mt-3 mb-1">
+          {/* Botón Continuar */}
           <button
+            autoFocus
             onClick={onResume}
-            className="block w-52 mx-auto py-3 tracking-[0.3em] uppercase font-bold
-                       active:scale-95 transition-all"
+            className="w-full py-3 px-6 rounded-xs cursor-pointer active:scale-95 hover:scale-[1.02] transition-all shadow-md"
             style={{
-              color: '#241800',
-              background: 'linear-gradient(180deg, #ffe9a8 0%, #f5c34a 50%, #d99a1f 100%)',
-              border: '1px solid rgba(255,220,140,0.75)',
-              boxShadow: '0 0 18px rgba(255,190,80,0.4), inset 0 1px 0 rgba(255,255,255,0.6)',
-              textShadow: '0 1px 0 rgba(255,255,255,0.4)',
+              background: 'linear-gradient(180deg, #96281b 0%, #7a1e14 60%, #5c140d 100%)',
+              border: '1.5px solid #bd8230',
+              outline: '1px solid rgba(255,220,130,0.3)',
+              outlineOffset: 3,
+              boxShadow: '0 4px 15px rgba(80, 20, 10, 0.4), inset 0 1px 0 rgba(255,255,255,0.35)',
+              color: '#fdf8ee',
+              fontFamily: '"Cinzel", "Palatino Linotype", "Georgia", serif',
+              letterSpacing: '0.22em',
+              textShadow: '0 1px 2px rgba(0,0,0,0.8)',
             }}
           >
-            CONTINUE
+            <span className="text-xs sm:text-sm font-bold tracking-[0.24em] uppercase flex items-center justify-center gap-2">
+              <span>⚜</span>
+              <span>Continuar Travesía</span>
+              <span>⚜</span>
+            </span>
           </button>
+
+          {/* Botón Guardar y Salir */}
           <button
             onClick={onExit}
-            className="block w-52 mx-auto py-3 tracking-[0.3em] uppercase font-bold
-                       text-white/70 hover:text-white active:scale-95 transition-all"
+            className="w-full py-2.5 px-6 rounded-xs cursor-pointer active:scale-95 hover:bg-[#e8d7bc] transition-all shadow-sm"
             style={{
-              background: 'transparent',
-              border: '2px solid rgba(224,190,120,0.55)',
-              textShadow: '2px 2px 0 rgba(0,0,0,0.8)',
+              background: 'linear-gradient(180deg, #fffdf7 0%, #f8eccf 35%, #edd7ad 75%, #dbbe8a 100%)',
+              border: '1.5px solid #5a3814',
+              outline: '1px dashed rgba(120, 75, 25, 0.45)',
+              outlineOffset: '-3.5px',
+              color: '#73180e',
+              fontFamily: '"Cinzel", "Palatino Linotype", "Georgia", serif',
+              letterSpacing: '0.2em',
             }}
           >
-            SALIR
+            <span className="text-xs font-bold tracking-[0.22em] uppercase">
+              💾 Guardar y Salir
+            </span>
           </button>
+        </div>
+
+        {/* Adorno inferior */}
+        <div className="text-[10px] text-[#8a6838] opacity-75 mt-3 font-serif italic">
+          ❧ Jardín del Edén · Progreso Guardado Localmente ❧
         </div>
       </div>
     </div>

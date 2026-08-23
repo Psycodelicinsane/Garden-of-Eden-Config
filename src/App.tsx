@@ -19,6 +19,7 @@ export default function App() {
   const showForbiddenTreeRef = useRef(false);
   const exploreHintStartedRef = useRef(false);
   const exploreHintTimerRef = useRef<number | null>(null);
+
   const [gameState, setGameState] = useState<GameState>('start');
   const [showIntro, setShowIntro] = useState(true);
   const [adminBootToGameplay, setAdminBootToGameplay] = useState(false);
@@ -30,14 +31,17 @@ export default function App() {
   const [showForbiddenTree, setShowForbiddenTree] = useState(false);
   const [adamThought, setAdamThought] = useState<{ text: string; key: number } | null>(null);
 
+  // Estados para el HUD
+  const [prompt, setPrompt] = useState<string | null>(null);
+  const [compassHeading, setCompassHeading] = useState(0);
+  const [playerPos, setPlayerPos] = useState({ x: 0, z: -20 });
+
   useEffect(() => {
     gameStateRef.current = gameState;
     showIntroRef.current = showIntro;
     showForbiddenTreeRef.current = showForbiddenTree;
   }, [gameState, showIntro, showForbiddenTree]);
 
-  // La ayuda inicial debe verse una sola vez por partida y desaparecer a los
-  // siete segundos aunque el jugador siga con cero alimentos.
   useEffect(() => {
     if (gameState === 'start') {
       if (exploreHintTimerRef.current !== null) {
@@ -65,8 +69,7 @@ export default function App() {
     }
   }, []);
 
-  // Crear el motor UNA sola vez al montar.
-  // Durante la intro solo carga el jardín en memoria; no arranca el loop del título aún.
+  // Crear el motor al montar
   useEffect(() => {
     if (!canvasRef.current) return;
 
@@ -80,22 +83,28 @@ export default function App() {
         setShowForbiddenTree(true);
       },
       onAdamThought: (text: string) => setAdamThought({ text, key: Date.now() }),
+      onPromptUpdate: setPrompt,
+      onCompassUpdate: (yaw, x, z) => {
+        setCompassHeading(yaw);
+        setPlayerPos({ x, z });
+      },
     });
 
     gameEngineRef.current = engine;
     engine.init();
 
-    return () => { engine.dispose(); };
+    return () => {
+      engine.dispose();
+    };
   }, []);
 
-  // Cuando termina la intro, recién ahí arranca la escena viva del título.
+  // Cuando termina la intro, arranca la escena de la pantalla de título
   useEffect(() => {
     if (!showIntro && !adminBootToGameplay && gameState === 'start') {
       gameEngineRef.current?.showTitleScreen();
     }
   }, [showIntro, adminBootToGameplay, gameState]);
 
-  // Si el admin activó boot directo muy pronto, asegurar el salto al gameplay
   useEffect(() => {
     if (adminBootToGameplay && gameEngineRef.current) {
       gameEngineRef.current.skipCinematic();
@@ -139,11 +148,13 @@ export default function App() {
         gameEngineRef.current?.resume();
       }
 
+      // Tecla Master Admin P:
+      // 1. Durante la intro: 1 pulsación salta SOLO la intro y muestra la pantalla de título
+      // 2. Si ya está en la pantalla de título o cinemática: salta directo al gameplay
       if (e.key === 'p' || e.key === 'P') {
         e.preventDefault();
 
-        // Atajo temporal de administración: también cierra la cinemática del
-        // Árbol del Conocimiento si está activa.
+        // Si está en la cinemática del Árbol: cerrarla y volver al gameplay
         if (showForbiddenTreeRef.current) {
           showForbiddenTreeRef.current = false;
           setShowForbiddenTree(false);
@@ -153,13 +164,30 @@ export default function App() {
           return;
         }
 
-        if (introVisible || currentState === 'start' || currentState === 'cinematic') {
+        // Si está en pausa: reanudar gameplay
+        if (currentState === 'paused') {
+          setGameState('playing');
+          gameEngineRef.current?.resume();
+          return;
+        }
+
+        // Durante la intro de PSYCODELICINSANE: 1 toque salta SOLO la intro y va al título
+        if (introVisible) {
+          setShowIntro(false);
+          setGameState('start');
+          gameEngineRef.current?.showTitleScreen();
+          return;
+        }
+
+        // Desde la pantalla de título o cinemática del Génesis: lleva directo al gameplay
+        if (currentState === 'start' || currentState === 'cinematic') {
           setAdminBootToGameplay(true);
           setShowIntro(false);
           setShowAwakening(false);
           setGameState('playing');
           setCinematicProgress(1);
           gameEngineRef.current?.skipCinematic();
+          return;
         }
       }
     };
@@ -184,21 +212,21 @@ export default function App() {
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-black">
-      {/* Canvas 3D — siempre visible, carga desde el primer segundo */}
+      {/* Canvas 3D */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full touch-none z-0"
         style={{ touchAction: 'none', opacity: 1, transition: 'opacity 1.8s ease-out' }}
       />
 
-      {/* Intro PSYCODELICINSANE — overlay sobre el jardín */}
+      {/* Intro PSYCODELICINSANE */}
       {showIntro && (
         <IntroSplash onEnd={handleIntroEnd} />
       )}
 
       <AwakeningTitle show={showAwakening} />
 
-      {/* Reflexión de Adán — pasamos objeto {text,key} para que una frase repetida redispare el efecto */}
+      {/* Reflexión de Adán */}
       <AdamThought thought={adamThought} />
 
       {/* Cinemática del árbol prohibido */}
@@ -232,6 +260,9 @@ export default function App() {
         <HUD
           score={score}
           food={foodCount}
+          prompt={prompt}
+          compassHeading={compassHeading}
+          playerPos={playerPos}
           onPause={handlePause}
           onSprint={(active) => gameEngineRef.current?.setTouchSprint(active)}
           onJump={() => gameEngineRef.current?.triggerTouchJump()}
@@ -242,20 +273,23 @@ export default function App() {
       )}
 
       {gameState === 'paused' && (
-        <PauseMenu onResume={handleResume} onExit={() => {
-          gameEngineRef.current?.saveRegistry();
-          gameEngineRef.current?.restart();
-          setScore(0);
-          setFoodCount(0);
-          setCinematicProgress(0);
-          setAdminBootToGameplay(false);
-          showForbiddenTreeRef.current = false;
-          setShowForbiddenTree(false);
-          setShowAwakening(false);
-          setAdamThought(null);
-          setShowIntro(true);
-          setGameState('start');
-        }} />
+        <PauseMenu
+          onResume={handleResume}
+          onExit={() => {
+            gameEngineRef.current?.saveRegistry();
+            gameEngineRef.current?.restart();
+            setScore(0);
+            setFoodCount(0);
+            setCinematicProgress(0);
+            setAdminBootToGameplay(false);
+            showForbiddenTreeRef.current = false;
+            setShowForbiddenTree(false);
+            setShowAwakening(false);
+            setAdamThought(null);
+            setShowIntro(false);
+            setGameState('start');
+          }}
+        />
       )}
     </div>
   );
