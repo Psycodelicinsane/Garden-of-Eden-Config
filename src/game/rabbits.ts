@@ -165,14 +165,16 @@ export class EdenRabbits {
       const y = this.getHeight(spot.x, spot.z);
       mesh.root.position.set(spot.x, y, spot.z);
       mesh.root.rotation.y = spot.heading;
+      mesh.root.scale.setScalar(1.75);
       scene.add(mesh.root);
+      const startHop = spot.coat % 2 === 0;
       this.rabbits.push({
         ...mesh,
-        state: 'idle',
-        timer: 1 + spot.coat * 0.4,
-        hopPhase: 0,
+        state: startHop ? 'hop' : 'idle',
+        timer: startHop ? 1.4 : 0.35 + spot.coat * 0.12,
+        hopPhase: startHop ? spot.heading : 0,
         heading: spot.heading,
-        speed: 2.4 + spot.coat * 0.15,
+        speed: 3.2 + spot.coat * 0.2,
       });
     }
   }
@@ -192,28 +194,30 @@ export class EdenRabbits {
       }
 
       if (r.state === 'flee' || r.state === 'hop') {
-        const burst = r.state === 'flee' ? r.speed * 1.55 : r.speed;
-        r.hopPhase += delta * (r.state === 'flee' ? 14 : 11);
-        const hop = Math.max(0, Math.sin(r.hopPhase));
-        const step = burst * hop * hop * delta * 2.1;
-        let nx = pos.x + Math.sin(r.heading) * step;
-        let nz = pos.z + Math.cos(r.heading) * step;
-        if (Math.abs(nz - riverCenterZ(nx)) < 16 || isMountainCore(nx, nz) || Math.hypot(nx, nz) < 20) {
-          r.heading += Math.PI * 0.6;
+        const burst = r.state === 'flee' ? r.speed * 1.7 : r.speed;
+        r.hopPhase += delta * (r.state === 'flee' ? 16 : 13);
+        const hop = Math.abs(Math.sin(r.hopPhase));
+        const step = burst * (0.35 + hop) * delta;
+        const nx = pos.x + Math.sin(r.heading) * step;
+        const nz = pos.z + Math.cos(r.heading) * step;
+        const tooCloseToTree = Math.hypot(nx, nz) < 6;
+        const blocked = Math.abs(nz - riverCenterZ(nx)) < 14 || isMountainCore(nx, nz) || tooCloseToTree;
+        if (blocked) {
+          r.heading += 1.1 + Math.random() * 0.8;
         } else {
-          pos.x = Math.max(-300, Math.min(300, nx));
-          pos.z = Math.max(-300, Math.min(300, nz));
+          pos.x = Math.max(-90, Math.min(90, nx));
+          pos.z = Math.max(-90, Math.min(90, nz));
         }
         r.root.rotation.y = r.heading;
-        r.body.position.y = hop * 0.11;
-        r.hindL.rotation.x = -0.9 * hop;
-        r.hindR.rotation.x = -0.9 * hop;
-        r.frontL.rotation.x = 0.7 * hop;
-        r.frontR.rotation.x = 0.7 * hop;
+        r.body.position.y = hop * 0.16;
+        r.hindL.rotation.x = -1.05 * hop;
+        r.hindR.rotation.x = -1.05 * hop;
+        r.frontL.rotation.x = 0.85 * hop;
+        r.frontR.rotation.x = 0.85 * hop;
         if (r.timer <= 0) {
-          r.state = 'idle';
-          r.timer = 1.2 + Math.random() * 2.4;
-          r.body.position.y = 0;
+          r.state = Math.random() > 0.35 ? 'hop' : 'idle';
+          r.timer = r.state === 'hop' ? 1.1 + Math.random() * 0.8 : 0.4 + Math.random() * 0.7;
+          if (r.state === 'idle') r.body.position.y = 0;
         }
       } else if (r.state === 'graze') {
         r.head.rotation.x = 0.35 + Math.sin(time * 6 + r.coat) * 0.08;
@@ -221,8 +225,8 @@ export class EdenRabbits {
         r.earR.rotation.z = 0.18 + Math.cos(time * 3.2 + r.coat) * 0.05;
         if (r.timer <= 0) {
           r.state = 'hop';
-          r.timer = 0.7 + Math.random() * 0.6;
-          r.heading += (Math.random() - 0.5) * 1.2;
+          r.timer = 1.2 + Math.random() * 0.8;
+          r.heading += (Math.random() - 0.5) * 1.4;
           r.hopPhase = 0;
           r.head.rotation.x = 0;
         }
@@ -235,9 +239,9 @@ export class EdenRabbits {
         r.frontL.rotation.x *= 0.8;
         r.frontR.rotation.x *= 0.8;
         if (r.timer <= 0) {
-          r.state = Math.random() > 0.45 ? 'hop' : 'graze';
-          r.timer = r.state === 'graze' ? 2 + Math.random() * 2 : 0.8;
-          r.heading += (Math.random() - 0.5) * 0.8;
+          r.state = Math.random() > 0.25 ? 'hop' : 'graze';
+          r.timer = r.state === 'graze' ? 1.2 + Math.random() * 1.2 : 1.3;
+          r.heading += (Math.random() - 0.5) * 1.1;
           r.hopPhase = 0;
         }
       }

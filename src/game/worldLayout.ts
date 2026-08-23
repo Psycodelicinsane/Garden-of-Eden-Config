@@ -117,28 +117,46 @@ export function isFruitTreeIndex(index: number): boolean {
   return index % 3 === 0;
 }
 
-export const RABBIT_COUNT = 16;
+export const RABBIT_COUNT = 20;
+export const RABBIT_NEAR_TREE = 8;
 
 function rabbitRand(seed: { n: number }) {
   seed.n = (seed.n * 16807) % 2147483647;
   return (seed.n - 1) / 2147483646;
 }
 
-/** Posiciones fijas de los conejos: lejos del árbol, del río y de las cumbres. */
+/** Varios junto al Árbol; el resto por el claro y el jardín cercano. */
 export function pickRabbitSpawns(
   count: number,
   isBlocked: (x: number, z: number) => boolean,
 ): Array<{ x: number; z: number; coat: number; heading: number }> {
   const seed = { n: 91 };
   const out: Array<{ x: number; z: number; coat: number; heading: number }> = [];
+  const near = Math.min(RABBIT_NEAR_TREE, count);
   let guard = 0;
+  while (out.length < near && guard < near * 80) {
+    guard++;
+    const ang = rabbitRand(seed) * Math.PI * 2;
+    const rad = 10 + rabbitRand(seed) * 12;
+    const x = Math.cos(ang) * rad;
+    const z = Math.sin(ang) * rad;
+    if (Math.abs(z - riverCenterZ(x)) < 18) continue;
+    if (isBlocked(x, z)) continue;
+    out.push({
+      x,
+      z,
+      coat: Math.floor(rabbitRand(seed) * 5),
+      heading: rabbitRand(seed) * Math.PI * 2,
+    });
+  }
+  guard = 0;
   while (out.length < count && guard < count * 80) {
     guard++;
-    const x = rabbitRand(seed) * 520 - 260;
-    const z = rabbitRand(seed) * 520 - 260;
+    const x = rabbitRand(seed) * 160 - 80;
+    const z = rabbitRand(seed) * 160 - 80;
     const d = Math.hypot(x, z);
-    if (d < 28) continue;
-    if (Math.abs(z - riverCenterZ(x)) < 22) continue;
+    if (d < 22 || d > 78) continue;
+    if (Math.abs(z - riverCenterZ(x)) < 20) continue;
     if (isMountainCore(x, z)) continue;
     if (isBlocked(x, z)) continue;
     out.push({
