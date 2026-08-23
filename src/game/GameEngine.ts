@@ -3033,7 +3033,10 @@ export class GameEngine {
   }
 
   private updatePromptsAndCompass() {
-    const yawDeg = ((-this.playerRotation * 180 / Math.PI) % 360 + 360) % 360;
+    // +Z es norte: el rumbo es la dirección de mirada en el plano XZ.
+    const lookX = -Math.sin(this.playerRotation);
+    const lookZ = -Math.cos(this.playerRotation);
+    const yawDeg = ((Math.atan2(lookX, lookZ) * 180 / Math.PI) % 360 + 360) % 360;
     this.callbacks.onCompassUpdate?.(yawDeg, this.playerPosition.x, this.playerPosition.z);
 
     const camDir = new THREE.Vector3();
@@ -3372,6 +3375,17 @@ export class GameEngine {
       lilithFacing,
     });
 
+    const inLilithShove = this.lilithGroup
+      ? lilithDistanceSq < LILITH_SHOVE_DISTANCE_SQ
+      : false;
+
+    // Recolectar frutos aunque Lilith esté cerca, si no estás en su espacio
+    // personal y el fruto está más delante que ella.
+    if (!inLilithShove) {
+      const harvested = this.tryHarvestFruit(forwardX, forwardZ, lilithFacing);
+      if (harvested) return;
+    }
+
     // 1. Interacción con LILITH (detección dinámica y objetivo explícito)
     if (this.lilithGroup && interactionTarget === 'lilith') {
       const dxL = this.playerPosition.x - this.lilithGroup.position.x;
@@ -3577,39 +3591,48 @@ export class GameEngine {
       }
     }
 
-    // 4. Recolección normal de frutas
+    this.tryHarvestFruit(forwardX, forwardZ, -1);
+  }
+
+  /** Recolecta el fruto más cercano si está delante. Devuelve true si recolectó. */
+  private tryHarvestFruit(forwardX: number, forwardZ: number, lilithFacing: number): boolean {
     let closest: THREE.Object3D | null = null;
     let closestDistSq = 25;
+    let closestFacing = -1;
     for (const h of this.harvestables) {
       if (h.userData.harvested) continue;
-      const dx = this.playerPosition.x - h.position.x;
-      const dz = this.playerPosition.z - h.position.z;
-      const distSq = dx * dx + dz * dz;
-      if (distSq < closestDistSq) {
-        closestDistSq = distSq;
-        closest = h;
+      const toX = h.position.x - this.playerPosition.x;
+      const toZ = h.position.z - this.playerPosition.z;
+      const distSq = toX * toX + toZ * toZ;
+      if (distSq >= closestDistSq || distSq < 0.0001) continue;
+      const dist = Math.sqrt(distSq);
+      const facing = (forwardX * toX + forwardZ * toZ) / dist;
+      if (facing < 0.25) continue;
+      closestDistSq = distSq;
+      closest = h;
+      closestFacing = facing;
+    }
+    if (!closest) return false;
+    if (lilithFacing >= 0.55 && closestFacing < lilithFacing + 0.08) return false;
+
+    const fruits: THREE.Object3D[] = [];
+    closest.traverse(child => {
+      if (child.userData.isFruit && child.parent) fruits.push(child);
+    });
+    if (fruits.length === 0) return false;
+    const removed = closest.userData.removedFruits as Array<{ mesh: THREE.Object3D; parent: THREE.Object3D }> || [];
+    for (const f of fruits) {
+      const parent = f.parent;
+      if (parent) {
+        parent.remove(f);
+        removed.push({ mesh: f, parent });
       }
     }
-    if (closest) {
-      const fruits: THREE.Object3D[] = [];
-      closest.traverse(child => {
-        if (child.userData.isFruit && child.parent) fruits.push(child);
-      });
-      if (fruits.length > 0) {
-        const removed = closest.userData.removedFruits as Array<{ mesh: THREE.Object3D; parent: THREE.Object3D }> || [];
-        for (const f of fruits) {
-          const parent = f.parent;
-          if (parent) {
-            parent.remove(f);
-            removed.push({ mesh: f, parent });
-          }
-        }
-        closest.userData.harvested = true;
-        closest.userData.removedFruits = removed;
-        this.food += 1;
-        this.callbacks.onFoodUpdate?.(Math.max(0, Math.ceil(this.food)));
-      }
-    }
+    closest.userData.harvested = true;
+    closest.userData.removedFruits = removed;
+    this.food += 1;
+    this.callbacks.onFoodUpdate?.(Math.max(0, Math.ceil(this.food)));
+    return true;
   }
 
   // Restaurar frutas al reiniciar la partida

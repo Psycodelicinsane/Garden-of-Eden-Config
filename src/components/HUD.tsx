@@ -16,13 +16,24 @@ interface HUDProps {
 }
 
 /** Pergamino horizontal con extremos enrollados. */
-function ScoreParchment({ children }: { children: ReactNode }) {
+function HudParchment({
+  children,
+  onClick,
+  compact,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  compact?: boolean;
+}) {
   const uid = useId().replace(/:/g, '');
   const paper = `paper-${uid}`;
   const roll = `roll-${uid}`;
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div
-      className="relative isolate"
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`relative isolate ${onClick ? 'cursor-pointer active:scale-95 hover:scale-[1.03] transition-transform' : ''}`}
       style={{ filter: 'drop-shadow(0 6px 10px rgba(40,20,6,0.55))' }}
     >
       <svg
@@ -60,10 +71,10 @@ function ScoreParchment({ children }: { children: ReactNode }) {
         <ellipse cx="14" cy="44" rx="6.2" ry="3.4" fill="#4a2e12" />
         <ellipse cx="246" cy="44" rx="6.2" ry="3.4" fill="#4a2e12" />
       </svg>
-      <div className="relative z-10 flex items-center justify-center gap-2.5 px-8 py-1.5 min-h-[36px] min-w-[168px]">
+      <div className={`relative z-10 flex items-center justify-center gap-2.5 py-1.5 ${compact ? 'px-7 min-h-[34px] min-w-[108px]' : 'px-8 min-h-[36px] min-w-[168px]'}`}>
         {children}
       </div>
-    </div>
+    </Tag>
   );
 }
 
@@ -168,7 +179,7 @@ export default function HUD({
 
           {/* Pergamino de Score */}
           <div className="flex flex-col">
-            <ScoreParchment>
+            <HudParchment>
               <span
                 className="text-[12px] font-serif font-black tracking-[0.2em] uppercase"
                 style={{
@@ -185,7 +196,7 @@ export default function HUD({
               >
                 {score.toString().padStart(6, '0')}
               </span>
-            </ScoreParchment>
+            </HudParchment>
 
             {closestLandmark && (
               <span
@@ -203,7 +214,7 @@ export default function HUD({
           <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center">
             {/* Brújula sin fondo oscuro, solo puntos cardinales flotantes */}
             <div
-              className="relative px-4 py-1 flex items-center gap-5 text-xs"
+              className="relative px-4 pt-1 pb-4 flex items-center gap-5 text-xs"
               style={{ minWidth: 240, justifyContent: 'center' }}
             >
               {COMPASS_POINTS.map((pt, i) => {
@@ -216,7 +227,7 @@ export default function HUD({
                 return (
                   <span
                     key={i}
-                    className={`font-serif transition-all ${
+                    className={`relative z-10 font-serif transition-all ${
                       isCenter
                         ? 'text-amber-200 font-bold scale-125 drop-shadow-[0_0_10px_rgba(255,215,100,0.95)]'
                         : pt.major
@@ -229,12 +240,11 @@ export default function HUD({
                 );
               })}
 
-              {/* Baliza sutil del Árbol */}
-              {Math.abs(treeRelAngle) < 70 && (
+              {Math.abs(treeRelAngle) < 80 && (
                 <div
-                  className="absolute text-emerald-300 text-xs animate-pulse"
+                  className="absolute bottom-0 text-[11px] pointer-events-none"
                   style={{
-                    left: `calc(50% + ${(treeRelAngle / 70) * 95}px)`,
+                    left: `calc(50% + ${(treeRelAngle / 80) * 108}px)`,
                     transform: 'translateX(-50%)',
                     filter: 'drop-shadow(0 0 6px rgba(110, 231, 183, 0.95))',
                   }}
@@ -265,19 +275,9 @@ export default function HUD({
 
         {/* ── TOP RIGHT: BOTÓN PAUSA EN PAPIRO (Estilo Botón del Título) ── */}
         <div className="absolute top-4 right-4 pointer-events-auto">
-          <button
-            onClick={onPause}
-            className="group relative px-5 py-1.5 rounded-xs flex items-center justify-center cursor-pointer active:scale-95 hover:scale-[1.03] transition-all shadow-xl"
-            style={{
-              background: 'linear-gradient(180deg, #fffdf7 0%, #f8eccf 35%, #edd7ad 75%, #dbbe8a 100%)',
-              border: '2px solid #5a3814',
-              outline: '1px dashed rgba(120, 75, 25, 0.45)',
-              outlineOffset: '-3.5px',
-              boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 0 10px rgba(180, 130, 60, 0.2)',
-            }}
-          >
+          <HudParchment onClick={onPause} compact>
             <span
-              className="text-xs font-serif font-bold tracking-[0.22em] uppercase text-[#73180e] group-hover:text-[#9c1f11] transition-colors"
+              className="text-xs font-serif font-bold tracking-[0.22em] uppercase text-[#73180e]"
               style={{
                 fontFamily: '"Cinzel", "Palatino Linotype", "Book Antiqua", "Georgia", serif',
                 textShadow: '0 1px 0 rgba(255,255,255,0.9)',
@@ -285,7 +285,7 @@ export default function HUD({
             >
               PAUSA
             </span>
-          </button>
+          </HudParchment>
         </div>
 
         {/* ── CENTER: CRUZ DORADA SEMITRANSPARENTE (PUNTERO) ── */}
