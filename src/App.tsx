@@ -19,6 +19,9 @@ export default function App() {
   const showForbiddenTreeRef = useRef(false);
   const exploreHintStartedRef = useRef(false);
   const exploreHintTimerRef = useRef<number | null>(null);
+  const awakeningTimerRef = useRef<number | null>(null);
+  const adminPCountRef = useRef(0);
+  const adminPTimerRef = useRef<number | null>(null);
 
   const [gameState, setGameState] = useState<GameState>('start');
   const [showIntro, setShowIntro] = useState(true);
@@ -35,6 +38,7 @@ export default function App() {
   const [prompt, setPrompt] = useState<string | null>(null);
   const [compassHeading, setCompassHeading] = useState(0);
   const [playerPos, setPlayerPos] = useState({ x: 0, z: -20 });
+  const [underwater, setUnderwater] = useState(false);
 
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -67,6 +71,12 @@ export default function App() {
     if (exploreHintTimerRef.current !== null) {
       window.clearTimeout(exploreHintTimerRef.current);
     }
+    if (adminPTimerRef.current !== null) {
+      window.clearTimeout(adminPTimerRef.current);
+    }
+    if (awakeningTimerRef.current !== null) {
+      window.clearTimeout(awakeningTimerRef.current);
+    }
   }, []);
 
   // Crear el motor al montar
@@ -88,6 +98,7 @@ export default function App() {
         setCompassHeading(yaw);
         setPlayerPos({ x, z });
       },
+      onUnderwater: setUnderwater,
     });
 
     gameEngineRef.current = engine;
@@ -148,47 +159,61 @@ export default function App() {
         gameEngineRef.current?.resume();
       }
 
-      // Tecla Master Admin P:
-      // 1. Durante la intro: 1 pulsación salta SOLO la intro y muestra la pantalla de título
-      // 2. Si ya está en la pantalla de título o cinemática: salta directo al gameplay
       if (e.key === 'p' || e.key === 'P') {
         e.preventDefault();
 
-        // Si está en la cinemática del Árbol: cerrarla y volver al gameplay
-        if (showForbiddenTreeRef.current) {
-          showForbiddenTreeRef.current = false;
-          setShowForbiddenTree(false);
-          setShowAwakening(false);
-          gameEngineRef.current?.endForbiddenCinematic();
-          gameEngineRef.current?.resume();
-          return;
-        }
+        const skipCinematicOnce = () => {
+          if (showForbiddenTreeRef.current) {
+            showForbiddenTreeRef.current = false;
+            setShowForbiddenTree(false);
+            setShowAwakening(false);
+            gameEngineRef.current?.endForbiddenCinematic();
+            gameEngineRef.current?.resume();
+            return;
+          }
+          if (introVisible) {
+            setShowIntro(false);
+            setGameState('start');
+            gameEngineRef.current?.showTitleScreen();
+            return;
+          }
+          if (currentState === 'cinematic') {
+            setShowAwakening(false);
+            setCinematicProgress(1);
+            gameEngineRef.current?.skipCinematic();
+            setGameState('playing');
+          }
+        };
 
-        // Si está en pausa: reanudar gameplay
-        if (currentState === 'paused') {
-          setGameState('playing');
-          gameEngineRef.current?.resume();
-          return;
-        }
-
-        // Durante la intro de PSYCODELICINSANE: 1 toque salta SOLO la intro y va al título
-        if (introVisible) {
-          setShowIntro(false);
-          setGameState('start');
-          gameEngineRef.current?.showTitleScreen();
-          return;
-        }
-
-        // Desde la pantalla de título o cinemática del Génesis: lleva directo al gameplay
-        if (currentState === 'start' || currentState === 'cinematic') {
+        const goStraightToGameplay = () => {
           setAdminBootToGameplay(true);
           setShowIntro(false);
           setShowAwakening(false);
-          setGameState('playing');
+          showForbiddenTreeRef.current = false;
+          setShowForbiddenTree(false);
           setCinematicProgress(1);
+          gameEngineRef.current?.endForbiddenCinematic();
           gameEngineRef.current?.skipCinematic();
+          setGameState('playing');
+        };
+
+        adminPCountRef.current += 1;
+        if (adminPTimerRef.current !== null) {
+          window.clearTimeout(adminPTimerRef.current);
+          adminPTimerRef.current = null;
+        }
+
+        if (adminPCountRef.current >= 3) {
+          adminPCountRef.current = 0;
+          goStraightToGameplay();
           return;
         }
+
+        adminPTimerRef.current = window.setTimeout(() => {
+          if (adminPCountRef.current === 1) skipCinematicOnce();
+          adminPCountRef.current = 0;
+          adminPTimerRef.current = null;
+        }, 420);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -204,7 +229,13 @@ export default function App() {
           reg.memoryAwakening = true;
           reg.hasSeenAwakening = true;
           localStorage.setItem('edenRegistry', JSON.stringify(reg));
-          setTimeout(() => setShowAwakening(false), 7000);
+          if (awakeningTimerRef.current !== null) {
+            window.clearTimeout(awakeningTimerRef.current);
+          }
+          awakeningTimerRef.current = window.setTimeout(() => {
+            setShowAwakening(false);
+            awakeningTimerRef.current = null;
+          }, 7000);
         }
       } catch { /* empty */ }
     }
@@ -240,6 +271,13 @@ export default function App() {
         }}
       />
 
+      {underwater && (
+        <div
+          className="absolute inset-0 pointer-events-none z-[25]"
+          style={{ background: 'rgba(8, 70, 130, 0.55)' }}
+        />
+      )}
+
       {/* Viñeta sutil durante el gameplay */}
       {gameState === 'playing' && (
         <div
@@ -256,7 +294,7 @@ export default function App() {
         <StartScreen onStart={handleStart} />
       )}
 
-      {(gameState === 'playing' || gameState === 'cinematic') && (
+      {gameState === 'playing' && !showForbiddenTree && (
         <HUD
           score={score}
           food={foodCount}
@@ -267,7 +305,7 @@ export default function App() {
           onSprint={(active) => gameEngineRef.current?.setTouchSprint(active)}
           onJump={() => gameEngineRef.current?.triggerTouchJump()}
           onInspect={() => gameEngineRef.current?.triggerInspect()}
-          showControls={gameState === 'playing'}
+          showControls
           showExploreHint={showExploreHint}
         />
       )}
