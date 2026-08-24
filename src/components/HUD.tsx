@@ -1,5 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
+import { bearingToPoint, shortestAngleDiff } from '../game/compass';
 import { EDEN_LANDMARKS } from '../game/worldLayout';
+import { Cartela } from './Cartela';
 
 interface HUDProps {
   score: number;
@@ -51,17 +53,10 @@ export default function HUD({
     return Math.floor(Math.sqrt(playerPos.x * playerPos.x + playerPos.z * playerPos.z));
   }, [playerPos.x, playerPos.z]);
 
-  const treeAngleDeg = useMemo(() => {
-    const angle = (Math.atan2(-playerPos.x, -playerPos.z) * 180 / Math.PI + 360) % 360;
-    return angle;
-  }, [playerPos.x, playerPos.z]);
-
   const treeRelAngle = useMemo(() => {
-    let diff = treeAngleDeg - compassHeading;
-    while (diff > 180) diff -= 360;
-    while (diff < -180) diff += 360;
-    return diff;
-  }, [treeAngleDeg, compassHeading]);
+    const treeBearing = bearingToPoint(playerPos.x, playerPos.z, 0, 0);
+    return shortestAngleDiff(compassHeading, treeBearing);
+  }, [playerPos.x, playerPos.z, compassHeading]);
 
   const closestLandmark = useMemo(() => {
     let minD = Number.POSITIVE_INFINITY;
@@ -82,7 +77,7 @@ export default function HUD({
     <>
       {/* ══════ HUD CLÁSICO DEL EDÉN ══════ */}
       <div className="absolute inset-0 pointer-events-none z-40 select-none font-serif">
-        {/* ── TOP LEFT: PLACA DE PAPIRO (GLORIA Y SACIEDAD) ── */}
+        {/* ── TOP LEFT: PLACA DE PAPIRO (SCORE Y SACIEDAD) ── */}
         <div
           className="absolute top-4 left-4 flex items-center gap-2.5 pointer-events-auto"
           style={{ filter: 'drop-shadow(0 6px 18px rgba(0,0,0,0.65))' }}
@@ -114,28 +109,26 @@ export default function HUD({
             </div>
           </div>
 
-          {/* Placa de Gloria en Papiro (Estilo Botón del Título) */}
+          {/* Pergamino de Score */}
           <div className="flex flex-col">
-            <div
-              className="relative px-4 py-1.5 rounded-xs flex items-center gap-2 shadow-xl"
-              style={{
-                background: 'linear-gradient(180deg, #fffdf7 0%, #f8eccf 35%, #edd7ad 75%, #dbbe8a 100%)',
-                border: '2px solid #5a3814',
-                outline: '1px dashed rgba(120, 75, 25, 0.45)',
-                outlineOffset: '-3.5px',
-                boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 0 10px rgba(180, 130, 60, 0.2)',
-              }}
-            >
-              <span className="text-[11px] font-serif font-bold tracking-[0.2em] uppercase text-[#73180e]">
-                GLORIA
+            <Cartela>
+              <span
+                className="text-[11px] font-serif font-black tracking-[0.18em] uppercase mr-2"
+                style={{
+                  color: '#d40f0f',
+                  textShadow: '0 1px 0 #fff4d6',
+                  WebkitTextStroke: '0.35px #6a0a0a',
+                }}
+              >
+                SCORE
               </span>
               <span
-                className="text-xs sm:text-sm font-mono font-bold text-[#2c1606] tracking-wider"
+                className="text-sm font-mono font-bold text-[#2c1606] tracking-wider"
                 style={{ textShadow: '0 1px 0 rgba(255,255,255,0.9)' }}
               >
                 {score.toString().padStart(6, '0')}
               </span>
-            </div>
+            </Cartela>
 
             {closestLandmark && (
               <span
@@ -153,8 +146,8 @@ export default function HUD({
           <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center">
             {/* Brújula sin fondo oscuro, solo puntos cardinales flotantes */}
             <div
-              className="relative px-4 py-1 flex items-center gap-5 text-xs"
-              style={{ minWidth: 240, justifyContent: 'center' }}
+              className="relative px-4 py-1 text-xs"
+              style={{ minWidth: 240, height: 22 }}
             >
               {COMPASS_POINTS.map((pt, i) => {
                 let diff = pt.deg - compassHeading;
@@ -166,26 +159,29 @@ export default function HUD({
                 return (
                   <span
                     key={i}
-                    className={`font-serif transition-all ${
+                    className={`absolute top-1/2 font-serif transition-all ${
                       isCenter
                         ? 'text-amber-200 font-bold scale-125 drop-shadow-[0_0_10px_rgba(255,215,100,0.95)]'
                         : pt.major
                         ? 'text-amber-100/80 font-semibold text-[11px] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]'
                         : 'text-amber-200/40 text-[10px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]'
                     }`}
+                    style={{
+                      left: `calc(50% + ${(diff / 75) * 108}px)`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
                   >
                     {pt.label}
                   </span>
                 );
               })}
 
-              {/* Baliza sutil del Árbol */}
-              {Math.abs(treeRelAngle) < 70 && (
+              {Math.abs(treeRelAngle) < 80 && (
                 <div
-                  className="absolute text-emerald-300 text-xs animate-pulse"
+                  className="absolute top-1/2 z-20 text-sm pointer-events-none"
                   style={{
-                    left: `calc(50% + ${(treeRelAngle / 70) * 95}px)`,
-                    transform: 'translateX(-50%)',
+                    left: `calc(50% + ${(treeRelAngle / 75) * 108}px)`,
+                    transform: 'translate(-50%, -50%)',
                     filter: 'drop-shadow(0 0 6px rgba(110, 231, 183, 0.95))',
                   }}
                   title={`Árbol del Conocimiento (${distToTree}m)`}
@@ -215,27 +211,17 @@ export default function HUD({
 
         {/* ── TOP RIGHT: BOTÓN PAUSA EN PAPIRO (Estilo Botón del Título) ── */}
         <div className="absolute top-4 right-4 pointer-events-auto">
-          <button
-            onClick={onPause}
-            className="group relative px-5 py-1.5 rounded-xs flex items-center justify-center cursor-pointer active:scale-95 hover:scale-[1.03] transition-all shadow-xl"
-            style={{
-              background: 'linear-gradient(180deg, #fffdf7 0%, #f8eccf 35%, #edd7ad 75%, #dbbe8a 100%)',
-              border: '2px solid #5a3814',
-              outline: '1px dashed rgba(120, 75, 25, 0.45)',
-              outlineOffset: '-3.5px',
-              boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 0 10px rgba(180, 130, 60, 0.2)',
-            }}
-          >
+          <Cartela onClick={onPause}>
             <span
-              className="text-xs font-serif font-bold tracking-[0.22em] uppercase text-[#73180e] group-hover:text-[#9c1f11] transition-colors"
+              className="text-xs font-serif font-bold tracking-[0.26em] uppercase text-[#73180e]"
               style={{
-                fontFamily: '"Cinzel", "Palatino Linotype", "Book Antiqua", "Georgia", serif',
+                fontFamily: 'Georgia, "Palatino Linotype", serif',
                 textShadow: '0 1px 0 rgba(255,255,255,0.9)',
               }}
             >
               PAUSA
             </span>
-          </button>
+          </Cartela>
         </div>
 
         {/* ── CENTER: CRUZ DORADA SEMITRANSPARENTE (PUNTERO) ── */}
@@ -273,13 +259,13 @@ export default function HUD({
         {/* ── BOTTOM CENTER: HINT EXPLORATORIO ── */}
         {showControls && showExploreHint && !prompt && (
           <div
-            className="absolute bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full bg-black/60 border border-amber-300/40 text-amber-200 text-xs text-center font-serif italic tracking-widest"
+            className="absolute bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 text-amber-100 text-xs text-center font-serif italic tracking-widest"
             style={{
-              textShadow: '0 2px 4px rgba(0,0,0,0.9)',
+              textShadow: '0 2px 8px rgba(0,0,0,1), 0 0 14px rgba(0,0,0,0.95), 1px 1px 2px #000',
               animation: 'ps2fade 2.5s ease-in-out infinite',
             }}
           >
-            ✦ Explora los senderos del Edén · Descubre los 4 Ríos Sagrados ✦
+            Explora el jardin
           </div>
         )}
       </div>

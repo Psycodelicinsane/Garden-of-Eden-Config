@@ -1,4 +1,5 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Cartela } from './Cartela';
 
 export interface Registry {
   distanceWalked: number;
@@ -45,11 +46,26 @@ const MEMORIES: Array<{ key: string; title: string; desc: string; verse: string 
   { key: 'river-gihon', title: 'El Río Gihón', desc: 'El segundo cauce de aguas vivas que nutre la tierra de Cus.', verse: 'Génesis 2:13' },
   { key: 'river-hiddekel', title: 'El Río Hidekel', desc: 'La corriente impetuosa que fluye al oriente de Asiria.', verse: 'Génesis 2:14' },
   { key: 'river-perat', title: 'El Río Éufrates', desc: 'El gran río de bendición que riega el valle del Edén.', verse: 'Génesis 2:14' },
+  { key: 'waterfall-source', title: 'El Nacedero', desc: 'De aquí sale el río que riega el jardín y luego se parte en cuatro.', verse: 'Génesis 2:10' },
   { key: 'sanctuary-clay', title: 'El Altar del Polvo', desc: 'El santuario primitivo donde fue modelado el primer hombre.', verse: 'Génesis 2:7' },
   { key: 'sanctuary-summit', title: 'El Mirador de la Creación', desc: 'La cumbre excelsa desde donde se contempla toda la obra divina.', verse: 'Génesis 1:31' },
 ];
 
-const MAP_LANDMARKS = [
+/** Ancla: el pin cuelga fuera del agua, en el filo del marco pintado. */
+type PinAnchor = 'center' | 'left' | 'right' | 'bottom';
+
+/** Posiciones sobre la carta pintada (no sobre el mundo 3D). */
+const MAP_LANDMARKS: Array<{
+  id: string;
+  name: string;
+  region: string;
+  desc: string;
+  verse: string;
+  x: number;
+  y: number;
+  pin: string;
+  anchor: PinAnchor;
+}> = [
   {
     id: 'tree',
     name: 'El Árbol del Conocimiento',
@@ -57,43 +73,64 @@ const MAP_LANDMARKS = [
     desc: 'Árbol sagrado en medio del jardín de donde emana la sabiduría del bien y del mal y la advertencia divina.',
     verse: 'Génesis 2:9',
     x: 50,
-    y: 48,
+    y: 62,
+    pin: 'Árbol',
+    anchor: 'center',
   },
   {
-    id: 'pishon',
-    name: 'Río Pisón (Río de Oro)',
-    region: 'Cuenca Occidental',
-    desc: 'El primer brazo del río que rodea toda la tierra de Havila, donde abunda el oro puro, el bedelio y el ónice.',
-    verse: 'Génesis 2:11',
-    x: 26,
-    y: 28,
+    id: 'waterfall',
+    name: 'El Nacedero',
+    region: 'Noroeste del Huerto',
+    desc: 'El manantial de donde nace el río que riega el jardín, antes de dividirse en cuatro cabezas.',
+    verse: 'Génesis 2:10',
+    x: 4.2,
+    y: 22,
+    pin: 'Nacedero',
+    anchor: 'left',
   },
   {
     id: 'gihon',
     name: 'Río Gihón (Manantiales)',
-    region: 'Meandro Norte',
+    region: 'Desembocadura norte',
     desc: 'El segundo río de aguas vivas que serpentea por las arboledas y fecunda toda la llanura de Cus.',
     verse: 'Génesis 2:13',
-    x: 44,
-    y: 34,
+    x: 96.4,
+    y: 18.4,
+    pin: 'Gihón',
+    anchor: 'right',
   },
   {
     id: 'hiddekel',
     name: 'Río Hidekel (Impetuoso)',
-    region: 'Corriente Oriental',
+    region: 'Desembocadura oriental',
     desc: 'El tercer río caudaloso que avanza veloz y cristalino hacia el oriente de Asiria.',
     verse: 'Génesis 2:14',
-    x: 68,
-    y: 28,
+    x: 96.4,
+    y: 24.6,
+    pin: 'Hidekel',
+    anchor: 'right',
   },
   {
     id: 'perat',
     name: 'Río Éufrates (Fértil)',
-    region: 'Vega de Levante',
+    region: 'Desembocadura de levante',
     desc: 'El cuarto río de la abundancia y la fecundidad que nutre el gran valle sagrado de la vida.',
     verse: 'Génesis 2:14',
-    x: 80,
-    y: 42,
+    x: 96.4,
+    y: 37.4,
+    pin: 'Éufrates',
+    anchor: 'right',
+  },
+  {
+    id: 'pishon',
+    name: 'Río Pisón (Río de Oro)',
+    region: 'Desembocadura sureste',
+    desc: 'El primer brazo del río que rodea toda la tierra de Havila, donde abunda el oro puro, el bedelio y el ónice.',
+    verse: 'Génesis 2:11',
+    x: 96.4,
+    y: 45.0,
+    pin: 'Pisón',
+    anchor: 'right',
   },
   {
     id: 'altar',
@@ -101,8 +138,10 @@ const MAP_LANDMARKS = [
     region: 'Claro del Suroeste',
     desc: 'Santuario primitivo de piedra y tierra donde Dios sopló en la nariz de Adán el aliento de vida.',
     verse: 'Génesis 2:7',
-    x: 42,
-    y: 64,
+    x: 43,
+    y: 88,
+    pin: 'Altar',
+    anchor: 'bottom',
   },
   {
     id: 'summit',
@@ -110,15 +149,23 @@ const MAP_LANDMARKS = [
     region: 'Cumbre Suroeste',
     desc: 'La cumbre más elevada de la montaña desde donde se divisa la totalidad del Edén y la obra del Creador.',
     verse: 'Génesis 1:31',
-    x: 20,
-    y: 76,
+    x: 4.2,
+    y: 78,
+    pin: 'Mirador',
+    anchor: 'left',
   },
 ];
+
+const PIN_TRANSFORM: Record<PinAnchor, string> = {
+  center: 'translate(-50%, -50%)',
+  left: 'translate(-8%, -50%)',
+  right: 'translate(-92%, -50%)',
+  bottom: 'translate(-50%, -18%)',
+};
 
 const gold = (a: number) => `rgba(224,190,120,${a})`;
 const SERIF_SHADOW = '0 2px 8px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9)';
 
-// Letras doradas elegantes: degradado + borde fino + brillo suave
 const GOLD_TEXT: CSSProperties = {
   backgroundImage: 'linear-gradient(180deg, #fffbe6 0%, #ffe9a8 25%, #f5c34a 50%, #d99a1f 80%, #a8740e 100%)',
   WebkitBackgroundClip: 'text',
@@ -128,37 +175,141 @@ const GOLD_TEXT: CSSProperties = {
   filter: 'drop-shadow(0 2px 1px rgba(40,24,2,0.85)) drop-shadow(0 0 16px rgba(255,195,80,0.35))',
 };
 
-const FRAME_BORDER = '2px solid rgba(224,190,120,0.75)';
-const FRAME_OUTLINE = '1px solid rgba(224,190,120,0.35)';
-const CORNER = '#ffd166';
-
-// Textura de papiro / pergamino antiguo de lujo
 const PAPYRUS_MAP_BG: CSSProperties = {
-  backgroundColor: '#f6f0dd',
-  backgroundImage: `
-    radial-gradient(ellipse at 50% 50%, rgba(255, 253, 246, 0.98) 0%, rgba(247, 239, 218, 0.95) 70%, rgba(226, 210, 178, 0.97) 100%),
-    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(160, 130, 90, 0.03) 3px, rgba(160, 130, 90, 0.03) 4px)
-  `,
-  boxShadow: 'inset 0 0 90px rgba(160, 120, 60, 0.28), 0 0 50px rgba(0,0,0,0.8)',
+  backgroundColor: '#f3ead4',
+  backgroundImage: 'radial-gradient(ellipse at 50% 42%, #fffaf0 0%, #f0e4c8 72%, #e2d2ae 100%)',
+  boxShadow: 'inset 0 0 90px rgba(160, 120, 60, 0.22), 0 0 50px rgba(0,0,0,0.8)',
   border: '3px solid #5a3a18',
 };
 
-function FrameCorner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
-  const s: CSSProperties = {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderColor: CORNER,
-    borderStyle: 'solid',
-    borderWidth: 0,
-    filter: 'drop-shadow(0 0 6px rgba(255,200,90,0.55))',
-    opacity: 0.9,
-  };
-  if (pos === 'tl') { s.top = -9; s.left = -9; s.borderTopWidth = 3; s.borderLeftWidth = 3; }
-  if (pos === 'tr') { s.top = -9; s.right = -9; s.borderTopWidth = 3; s.borderRightWidth = 3; }
-  if (pos === 'bl') { s.bottom = -9; s.left = -9; s.borderBottomWidth = 3; s.borderLeftWidth = 3; }
-  if (pos === 'br') { s.bottom = -9; s.right = -9; s.borderBottomWidth = 3; s.borderRightWidth = 3; }
-  return <span aria-hidden style={s} />;
+function CornerVineGlyph({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
+  const place: CSSProperties = {
+    tl: { top: 2, left: 2, transform: 'none' },
+    tr: { top: 2, right: 2, transform: 'scaleX(-1)' },
+    bl: { bottom: 2, left: 2, transform: 'scaleY(-1)' },
+    br: { bottom: 2, right: 2, transform: 'scale(-1,-1)' },
+  }[pos];
+  const g = `vine-${pos}`;
+
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 88 88"
+      className="pointer-events-none"
+      style={{
+        position: 'absolute',
+        width: 76,
+        height: 76,
+        zIndex: 4,
+        filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9)) drop-shadow(0 0 6px rgba(255,200,90,0.28))',
+        ...place,
+      }}
+    >
+      <defs>
+        <linearGradient id={`${g}-gold`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#fff6c8" />
+          <stop offset="45%" stopColor="#f0c24a" />
+          <stop offset="100%" stopColor="#8a5610" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M6 6 L72 6 C58 8 48 18 46 32 C44 48 28 58 8 56 L8 72"
+        fill="none"
+        stroke={`url(#${g}-gold)`}
+        strokeWidth="3.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14 14 L54 14 C46 16 40 24 38 34 C36 46 24 54 14 52 L14 54"
+        fill="none"
+        stroke="#ffe08a"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        opacity="0.9"
+      />
+      <path
+        d="M28 28 C40 22 52 30 48 40 C44 50 30 50 28 40 C26 32 34 30 38 34 C40 36 38 40 34 40"
+        fill="none"
+        stroke={`url(#${g}-gold)`}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+      <path d="M20 10 C18 18 12 22 8 20" fill="none" stroke="#e8c050" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M10 22 C18 20 24 26 22 34" fill="none" stroke="#e8c050" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M52 10 C56 16 64 18 70 14" fill="none" stroke="#d4a428" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M10 50 C16 56 14 66 8 70" fill="none" stroke="#d4a428" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M16 16 C12 12 8 16 12 20 C16 18 18 16 16 16 Z" fill="#f0c24a" stroke="#3a2208" strokeWidth="0.5" />
+      <path d="M58 18 C64 14 68 22 62 24 C58 22 56 20 58 18 Z" fill="#c49220" stroke="#3a2208" strokeWidth="0.5" />
+      <path d="M18 48 C12 50 14 58 20 54 C22 50 20 48 18 48 Z" fill="#c49220" stroke="#3a2208" strokeWidth="0.5" />
+      <circle cx="36" cy="38" r="3.2" fill="#fff6c4" stroke="#6a4010" strokeWidth="0.8" />
+    </svg>
+  );
+}
+
+function MapSideVines({ side }: { side: 'left' | 'right' }) {
+  const flip = side === 'right';
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 36 420"
+      preserveAspectRatio="none"
+      className="pointer-events-none hidden md:block h-full w-7 shrink-0"
+      style={{
+        transform: flip ? 'scaleX(-1)' : undefined,
+        filter: 'drop-shadow(0 1px 2px rgba(40,20,4,0.45))',
+      }}
+    >
+      <path
+        d="M22 8 C 10 50, 30 90, 14 140 C 4 180, 28 220, 12 270 C 2 310, 26 350, 16 410"
+        fill="none"
+        stroke="#8a5a18"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M18 20 C 8 70, 26 110, 12 168 C 6 210, 24 250, 14 320 C 8 360, 22 390, 18 412"
+        fill="none"
+        stroke="#c49220"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      {[40, 110, 185, 260, 335].map((y) => (
+        <path
+          key={y}
+          d={`M16 ${y} C 6 ${y - 8}, 4 ${y + 6}, 14 ${y + 10} C 20 ${y + 4}, 22 ${y - 2}, 16 ${y} Z`}
+          fill="#c49220"
+          stroke="#4a2e10"
+          strokeWidth="0.6"
+        />
+      ))}
+      {[75, 150, 225, 300].map((y) => (
+        <circle key={y} cx="20" cy={y} r="2.4" fill="#f0c24a" stroke="#5a3814" strokeWidth="0.5" />
+      ))}
+    </svg>
+  );
+}
+
+function ClassicFrame() {
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{
+        border: '14px solid #8a5a12',
+        boxShadow: `
+          inset 0 0 0 3px #f0c24a,
+          inset 0 0 0 6px #3a2208,
+          inset 0 0 0 9px #c49220,
+          inset 0 0 70px rgba(0,0,0,0.45)
+        `,
+      }}
+    >
+      <CornerVineGlyph pos="tl" />
+      <CornerVineGlyph pos="tr" />
+      <CornerVineGlyph pos="bl" />
+      <CornerVineGlyph pos="br" />
+    </div>
+  );
 }
 
 function readRegistry(): Registry {
@@ -170,9 +321,6 @@ function readRegistry(): Registry {
   }
 }
 
-/**
- * Letra G Decorada e Iluminada estilo manuscrito medieval
- */
 function DecoratedLetterG() {
   return (
     <span className="relative inline-flex items-baseline shrink-0 select-none mr-0.5 align-baseline">
@@ -194,8 +342,6 @@ function DecoratedLetterG() {
             <stop offset="100%" stopColor="#a8740e" />
           </linearGradient>
         </defs>
-
-        {/* Enredaderas ornamentales de acanto */}
         <path
           d="M18,52 C8,24 38,6 64,8 C80,10 92,24 88,38 C84,50 72,54 62,48 C52,42 48,28 58,20 C66,14 78,18 74,28"
           stroke="#ffd875"
@@ -208,20 +354,15 @@ function DecoratedLetterG() {
           strokeWidth="2.2"
           strokeLinecap="round"
         />
-        {/* Rosetas de oro */}
         <circle cx="28" cy="24" r="5" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.5" />
         <circle cx="78" cy="82" r="5" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.5" />
         <circle cx="16" cy="74" r="4" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.2" />
-
-        {/* Letra G Monumental */}
         <path
           d="M86,36 C82,24 72,16 54,16 C32,16 16,34 16,60 C16,84 32,100 58,100 C78,100 90,88 90,68 L56,68 L56,54 L98,54 L98,72 C98,96 78,108 54,108 C26,108 6,86 6,60 C6,30 26,6 56,6 C78,6 92,15 98,28 Z"
           fill="url(#goldDecorG_v8)"
           stroke="rgba(58,36,4,0.75)"
           strokeWidth="2"
         />
-
-        {/* Florón frontal */}
         <polygon points="56,6 61,0 66,6 61,12" fill="#fffbe6" stroke="#4a2a06" strokeWidth="1" />
         <circle cx="77" cy="61" r="3.5" fill="#fffbe6" stroke="#4a2a06" strokeWidth="1" />
       </svg>
@@ -229,9 +370,6 @@ function DecoratedLetterG() {
   );
 }
 
-/**
- * Letra E Decorada e Iluminada estilo Uncial / Lombardo Medieval
- */
 function DecoratedLetterE() {
   return (
     <span className="relative inline-flex items-baseline shrink-0 select-none mr-0.5 align-baseline">
@@ -253,8 +391,6 @@ function DecoratedLetterE() {
             <stop offset="100%" stopColor="#a8740e" />
           </linearGradient>
         </defs>
-
-        {/* Enredaderas de acanto */}
         <path
           d="M18,48 C8,22 36,4 62,6 C78,8 90,20 86,36 C82,48 70,52 60,46 C50,40 46,26 56,18 C64,12 76,16 72,26"
           stroke="#ffd875"
@@ -267,12 +403,9 @@ function DecoratedLetterE() {
           strokeWidth="2.2"
           strokeLinecap="round"
         />
-        {/* Rosetas de pan de oro */}
         <circle cx="26" cy="22" r="5" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.5" />
         <circle cx="78" cy="82" r="5" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.5" />
         <circle cx="16" cy="74" r="4" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.2" />
-
-        {/* Cuerpo de la Letra E */}
         <path
           d="
             M 84,28
@@ -291,21 +424,97 @@ function DecoratedLetterE() {
           stroke="rgba(58,36,4,0.75)"
           strokeWidth="2"
         />
-
-        {/* Barra central de la E */}
         <path
           d="M 18,52 L 68,52 C 74,48 84,52 88,58 C 84,64 74,68 68,64 L 18,64 Z"
           fill="url(#goldDecorE_v8)"
           stroke="rgba(58,36,4,0.75)"
           strokeWidth="1.8"
         />
-
-        {/* Remates iluminados */}
         <polygon points="84,28 89,20 94,28 89,34" fill="#fffbe6" stroke="#4a2a06" strokeWidth="1" />
         <circle cx="78" cy="58" r="3.2" fill="#fffbe6" stroke="#4a2a06" strokeWidth="1" />
         <polygon points="88,80 93,72 98,80 93,86" fill="#fffbe6" stroke="#4a2a06" strokeWidth="1" />
       </svg>
     </span>
+  );
+}
+
+function MapIllustration({
+  selectedId,
+  onSelect,
+}: {
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [box, setBox] = useState({ left: 0, top: 0, width: 0, height: 0 });
+
+  const measure = useCallback(() => {
+    const host = hostRef.current;
+    const img = imgRef.current;
+    if (!host || !img || !img.naturalWidth) return;
+    const hr = host.getBoundingClientRect();
+    const ir = img.naturalWidth / img.naturalHeight;
+    const cr = hr.width / hr.height;
+    let width: number;
+    let height: number;
+    if (ir > cr) {
+      width = hr.width;
+      height = hr.width / ir;
+    } else {
+      height = hr.height;
+      width = hr.height * ir;
+    }
+    setBox({
+      left: (hr.width - width) / 2,
+      top: (hr.height - height) / 2,
+      width,
+      height,
+    });
+  }, []);
+
+  useEffect(() => {
+    measure();
+    const host = hostRef.current;
+    if (!host || typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const ro = new ResizeObserver(measure);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [measure]);
+
+  return (
+    <div ref={hostRef} className="relative h-full w-full min-h-0 min-w-0">
+      <img
+        ref={imgRef}
+        src="/images/mapa-eden-sin-cartela.png"
+        alt="Mapa del jardín del Edén visto desde arriba"
+        className="absolute inset-0 h-full w-full object-contain"
+        draggable={false}
+        onLoad={measure}
+      />
+      <div
+        className="absolute z-10"
+        style={{ left: box.left, top: box.top, width: box.width, height: box.height }}
+      >
+        {MAP_LANDMARKS.map((lm) => (
+          <button
+            key={lm.id}
+            onClick={() => onSelect(lm.id)}
+            className="absolute z-10 cursor-pointer touch-manipulation"
+            style={{ left: `${lm.x}%`, top: `${lm.y}%`, transform: PIN_TRANSFORM[lm.anchor] }}
+            aria-pressed={selectedId === lm.id}
+            aria-label={lm.name}
+          >
+            <Cartela size="pin" selected={selectedId === lm.id}>
+              {lm.pin}
+            </Cartela>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -331,123 +540,85 @@ export default function StartScreen({ onStart }: Props) {
         transition: 'opacity 1.2s ease',
       }}
     >
-      {/* ── MARCO DE PANTALLA ORIGINAL ELEGANTE ── */}
+      <div className="absolute inset-0 pointer-events-none z-[1]">
+        <ClassicFrame />
+      </div>
+
       <div
-        className="absolute inset-2 md:inset-4 pointer-events-none z-10"
+        className="absolute left-1/2 -translate-x-1/2 z-20 flex flex-col items-center px-4 pointer-events-none"
         style={{
-          border: FRAME_BORDER,
-          outline: FRAME_OUTLINE,
-          outlineOffset: '5px',
-          boxShadow: 'inset 0 0 90px rgba(0,0,0,0.55)',
+          top: 'max(2.15rem, calc(1.35rem + env(safe-area-inset-top, 0px)))',
+          opacity: visible ? 1 : 0,
+          transition: 'opacity 1.2s ease 0.15s',
         }}
       >
-        <FrameCorner pos="tl" />
-        <FrameCorner pos="tr" />
-        <FrameCorner pos="bl" />
-        <FrameCorner pos="br" />
-      </div>
+        <div className="flex items-center justify-center gap-3 select-none whitespace-nowrap">
+          <div className="h-px w-8 sm:w-14 bg-gradient-to-r from-transparent via-[#ffd166] to-transparent opacity-85" />
+          <span
+            className="text-xs sm:text-sm font-serif tracking-[0.32em] uppercase font-bold text-amber-200 whitespace-nowrap"
+            style={{ textShadow: '0 0 12px rgba(255, 215, 100, 0.8), 0 2px 4px rgba(0,0,0,0.95)' }}
+          >
+            PSYCODELICINSANE · 2026
+          </span>
+          <div className="h-px w-8 sm:w-14 bg-gradient-to-r from-transparent via-[#ffd166] to-transparent opacity-85" />
+        </div>
 
-      {/* ── CABECERA SUPERIOR: PSYCODELICINSANE · 2026 (Todo seguido y centrado arriba) ── */}
-      <div
-        className="absolute top-5 sm:top-6 md:top-7 left-1/2 -translate-x-1/2 flex items-center justify-center gap-3 z-20 pointer-events-none select-none whitespace-nowrap"
-        style={{ opacity: visible ? 1 : 0, transition: 'opacity 1.2s ease 0.2s' }}
-      >
-        <div className="h-px w-8 sm:w-14 bg-gradient-to-r from-transparent via-[#ffd166] to-transparent opacity-85" />
-        <span
-          className="text-xs sm:text-sm font-serif tracking-[0.32em] uppercase font-bold text-amber-200 whitespace-nowrap"
-          style={{
-            textShadow: '0 0 12px rgba(255, 215, 100, 0.8), 0 2px 4px rgba(0,0,0,0.95)',
-          }}
-        >
-          PSYCODELICINSANE · 2026
-        </span>
-        <div className="h-px w-8 sm:w-14 bg-gradient-to-r from-transparent via-[#ffd166] to-transparent opacity-85" />
-      </div>
-
-      {/* ══════ PORTADA PRINCIPAL ══════ */}
-      {page === 'main' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-6 pb-12 pt-2">
-          {visible && (
-            <div
-              className="text-center flex flex-col items-center mb-6 sm:mb-8"
+        {page === 'main' && (
+          <div className="mt-4 sm:mt-5 text-center flex flex-col items-center">
+            <h2
+              className="inline-flex items-center justify-center"
               style={{
-                transform: visible ? 'scale(1)' : 'scale(0.88)',
-                opacity: visible ? 1 : 0,
-                transition: 'all 1.4s cubic-bezier(0.16,1,0.3,1) 0.2s',
+                fontSize: 'clamp(2.4rem, 8.5vw, 5.4rem)',
+                fontFamily: 'Georgia, "Palatino Linotype", serif',
+                fontWeight: 700,
+                lineHeight: 1,
+                letterSpacing: '0.06em',
+                ...GOLD_TEXT,
               }}
             >
-              {/* ── TÍTULO GARDEN OF EDEN CON LETRAS DECORADAS ── */}
-              <div className="px-4 py-1 flex flex-col items-center">
-                {/* Garden */}
-                <h2
-                  className="inline-flex items-center justify-center"
-                  style={{
-                    fontSize: 'clamp(2.8rem, 9.5vw, 6.2rem)',
-                    fontFamily: 'Georgia, "Palatino Linotype", serif',
-                    fontWeight: 700,
-                    lineHeight: 1,
-                    letterSpacing: '0.06em',
-                    ...GOLD_TEXT,
-                  }}
-                >
-                  <DecoratedLetterG />arden
-                </h2>
-
-                {/* of con líneas doradas */}
-                <div
-                  className="flex items-center justify-center gap-3.5 my-1 sm:my-2"
-                  style={{ opacity: visible ? 1 : 0, transition: 'opacity 1s ease 1s' }}
-                >
-                  <div
-                    style={{
-                      height: 2,
-                      width: 50,
-                      background: 'linear-gradient(90deg, transparent, #ffd166)',
-                      boxShadow: '0 0 8px rgba(255, 209, 102, 0.8)',
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontFamily: 'Georgia, "Palatino Linotype", serif',
-                      fontSize: 'clamp(1.1rem, 3.5vw, 1.8rem)',
-                      fontStyle: 'italic',
-                      fontWeight: 700,
-                      color: '#ffe599',
-                      letterSpacing: '0.22em',
-                      textShadow: '0 0 10px rgba(255, 209, 102, 0.9), 0 2px 4px rgba(0,0,0,0.95)',
-                    }}
-                  >
-                    of
-                  </span>
-                  <div
-                    style={{
-                      height: 2,
-                      width: 50,
-                      background: 'linear-gradient(270deg, transparent, #ffd166)',
-                      boxShadow: '0 0 8px rgba(255, 209, 102, 0.8)',
-                    }}
-                  />
-                </div>
-
-                {/* Eden */}
-                <h2
-                  className="inline-flex items-center justify-center"
-                  style={{
-                    fontSize: 'clamp(2.8rem, 9.5vw, 6.2rem)',
-                    fontFamily: 'Georgia, "Palatino Linotype", serif',
-                    fontWeight: 700,
-                    lineHeight: 1,
-                    letterSpacing: '0.08em',
-                    ...GOLD_TEXT,
-                  }}
-                >
-                  <DecoratedLetterE />den
-                </h2>
-              </div>
+              <DecoratedLetterG />arden
+            </h2>
+            <div className="flex items-center justify-center gap-3.5 my-1 sm:my-1.5">
+              <div style={{ height: 2, width: 50, background: 'linear-gradient(90deg, transparent, #ffd166)', boxShadow: '0 0 8px rgba(255, 209, 102, 0.8)' }} />
+              <span
+                style={{
+                  fontFamily: 'Georgia, "Palatino Linotype", serif',
+                  fontSize: 'clamp(1rem, 3.2vw, 1.6rem)',
+                  fontStyle: 'italic',
+                  fontWeight: 700,
+                  color: '#ffe599',
+                  letterSpacing: '0.22em',
+                  textShadow: '0 0 10px rgba(255, 209, 102, 0.9), 0 2px 4px rgba(0,0,0,0.95)',
+                }}
+              >
+                of
+              </span>
+              <div style={{ height: 2, width: 50, background: 'linear-gradient(270deg, transparent, #ffd166)', boxShadow: '0 0 8px rgba(255, 209, 102, 0.8)' }} />
             </div>
-          )}
+            <h2
+              className="inline-flex items-center justify-center"
+              style={{
+                fontSize: 'clamp(2.4rem, 8.5vw, 5.4rem)',
+                fontFamily: 'Georgia, "Palatino Linotype", serif',
+                fontWeight: 700,
+                lineHeight: 1,
+                letterSpacing: '0.08em',
+                ...GOLD_TEXT,
+              }}
+            >
+              <DecoratedLetterE />den
+            </h2>
+          </div>
+        )}
+      </div>
 
-          {/* Ornamento sobre el botón */}
+      {page === 'main' && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 z-20 flex flex-col items-center px-4"
+          style={{
+            bottom: 'max(5.55rem, calc(4.35rem + env(safe-area-inset-bottom, 0px)))',
+          }}
+        >
           <div
             className="flex items-center justify-center gap-3 my-2"
             style={{ opacity: visible ? 1 : 0, transition: 'opacity 1s ease 1.6s' }}
@@ -457,7 +628,6 @@ export default function StartScreen({ onStart }: Props) {
             <span style={{ color: gold(0.5), fontSize: '0.7rem', textShadow: '0 0 8px rgba(255,200,110,0.5)' }}>✦</span>
           </div>
 
-          {/* Botón principal transparente sobre las pestañas inferiores sin solaparse */}
           <button
             autoFocus
             aria-label="Iniciar partida"
@@ -513,9 +683,8 @@ export default function StartScreen({ onStart }: Props) {
         </div>
       )}
 
-      {/* ══════ REGISTROS - RECUERDOS ══════ */}
       {page === 'memories' && (
-        <div className="absolute inset-0 flex items-center justify-center px-6">
+        <div className="absolute inset-0 z-20 flex items-center justify-center px-8" style={{ paddingBottom: '4.5rem' }}>
           <div className="w-full max-w-sm">
             <p
               className="text-center text-xs tracking-[0.5em] mb-5"
@@ -569,7 +738,6 @@ export default function StartScreen({ onStart }: Props) {
               )}
             </div>
 
-            {/* Score más alto */}
             <div
               className="text-center mb-5 py-2"
               style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
@@ -588,9 +756,8 @@ export default function StartScreen({ onStart }: Props) {
         </div>
       )}
 
-      {/* ══════ REGISTROS - DATOS ══════ */}
       {page === 'stats' && (
-        <div className="absolute inset-0 flex items-center justify-center px-6">
+        <div className="absolute inset-0 z-20 flex items-center justify-center px-8" style={{ paddingBottom: '4.5rem' }}>
           <div className="w-full max-w-xs">
             <p
               className="text-center text-xs tracking-[0.5em] mb-5"
@@ -626,110 +793,46 @@ export default function StartScreen({ onStart }: Props) {
         </div>
       )}
 
-      {/* ══════ CARTA GEOGRÁFICA DEL EDÉN EN PAPIRO ══════ */}
       {page === 'map' && (
         <div
-          className="absolute inset-0 z-30 flex flex-col items-center justify-between p-3 md:p-6 select-none overflow-y-auto"
-          style={PAPYRUS_MAP_BG}
+          className="absolute z-30 flex flex-col md:flex-row gap-2 md:gap-3 select-none overflow-hidden"
+          style={{
+            ...PAPYRUS_MAP_BG,
+            top: 'max(1.15rem, calc(0.55rem + env(safe-area-inset-top, 0px)))',
+            bottom: 'max(4.35rem, calc(3.15rem + env(safe-area-inset-bottom, 0px)))',
+            left: 'max(1.05rem, calc(0.55rem + env(safe-area-inset-left, 0px)))',
+            right: 'max(1.05rem, calc(0.55rem + env(safe-area-inset-right, 0px)))',
+          }}
         >
-          {/* Cabecera Clásica en Papiro */}
-          <div className="w-full max-w-4xl flex justify-between items-center px-2 py-1 border-b border-[#8a6838]/60 mb-2">
-            <div>
-              <span className="text-[10px] font-serif uppercase tracking-[0.35em] text-[#7c5828] font-bold">
-                — Códice Cartográfico del Génesis —
-              </span>
-              <h2 className="text-xl md:text-2xl font-serif text-[#2c1a0c] font-normal tracking-wide">
-                Carta Geográfica del Jardín del Edén y los Cuatro Ríos
-              </h2>
-            </div>
-
-            <button
-              onClick={() => setPage('main')}
-              className="px-4 py-1.5 bg-[#8e1e12] hover:bg-[#a82517] text-[#fdf8ee] border border-[#d4af37] rounded-xs font-serif text-xs tracking-wider cursor-pointer shadow-md active:scale-95 transition-all"
-            >
-              ✕ VOLVER AL INICIO
-            </button>
+          <MapSideVines side="left" />
+          <div className="relative z-10 flex-1 min-h-0 min-w-0 overflow-hidden border-2 border-[#7a5828] bg-[#efe4c4] shadow-2xl">
+            <MapIllustration selectedId={selectedPinId} onSelect={setSelectedPinId} />
           </div>
 
-          {/* Mapa Ilustrado Agrandado con Alta Definición */}
-          <div className="relative flex-1 w-full max-h-[62vh] flex items-center justify-center p-1 my-auto">
-            <div
-              className="relative max-w-full max-h-full aspect-square overflow-hidden rounded-xs border-2 border-[#7a5828] shadow-2xl bg-[#2b190a]"
-            >
-              <img
-                src="images/mapa-jardin-eden.png"
-                alt="Mapa del jardín del Edén visto desde arriba"
-                width={2048}
-                height={2048}
-                className="block w-full h-full object-contain sepia-[0.10]"
-              />
-
-              {/* Marcadores dorados sobre el mapa */}
-              {MAP_LANDMARKS.map((lm) => {
-                const isSelected = selectedPinId === lm.id;
-                return (
-                  <button
-                    key={lm.id}
-                    onClick={() => setSelectedPinId(lm.id)}
-                    title={`${lm.name} (${lm.region})`}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer p-2.5 group"
-                    style={{ left: `${lm.x}%`, top: `${lm.y}%` }}
-                  >
-                    <div
-                      className={`w-4 h-4 rounded-full border-2 transition-all ${
-                        isSelected
-                          ? 'bg-[#ffd166] border-[#8e1e12] scale-135 shadow-[0_0_12px_#ffd166] animate-pulse'
-                          : 'bg-[#fffdf5] border-[#5a3a18] shadow-md group-hover:scale-125 group-hover:bg-[#ffd166]'
-                      }`}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Tarjeta de Información Detallada del Lugar Seleccionado */}
-          <div className="w-full max-w-4xl mt-3 p-3.5 rounded-xs bg-[#fffdf8]/90 border border-[#8a6838]/70 shadow-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[#8e1e12] text-xs">❖</span>
-                <h4 className="font-serif font-bold text-sm md:text-base text-[#2a1708]">
-                  {activeLandmark.name}
-                </h4>
-                <span className="text-[10px] font-mono text-[#7c5828] bg-[#ede0c4] px-2 py-0.5 rounded-xs border border-[#c8b492]">
-                  {activeLandmark.region}
-                </span>
-              </div>
-              <p className="text-xs md:text-sm font-serif italic text-[#553c20] mt-1 ml-4 leading-relaxed">
-                {activeLandmark.desc}
-              </p>
-            </div>
-            <span className="text-xs font-mono italic text-[#8e1e12] font-semibold sm:text-right shrink-0">
+          <aside className="relative z-10 shrink-0 w-full md:w-[280px] lg:w-[320px] md:h-full max-h-[32vh] md:max-h-none overflow-y-auto rounded-xs border border-[#8a6838]/70 bg-[#fffdf8]/95 px-3 py-2.5 md:px-4 md:py-4">
+            <p className="text-[9px] md:text-[10px] font-serif uppercase tracking-[0.28em] text-[#7c5828]">
+              {activeLandmark.region}
+            </p>
+            <h3 className="mt-0.5 font-serif font-bold text-[#2a1708] text-sm md:text-lg leading-tight">
+              {activeLandmark.name}
+            </h3>
+            <p className="mt-1.5 font-serif italic text-[#553c20] text-[11px] md:text-sm leading-relaxed">
+              {activeLandmark.desc}
+            </p>
+            <p className="mt-2 text-[10px] md:text-xs font-mono italic text-[#8e1e12] font-semibold">
               {activeLandmark.verse}
-            </span>
-          </div>
-
-          {/* Selector de Lugares Sagrados */}
-          <div className="flex flex-wrap justify-center gap-1.5 mt-2 max-w-3xl">
-            {MAP_LANDMARKS.map((lm) => (
-              <button
-                key={lm.id}
-                onClick={() => setSelectedPinId(lm.id)}
-                className={`px-3 py-1 rounded-xs font-serif text-[11px] md:text-xs transition-all cursor-pointer ${
-                  selectedPinId === lm.id
-                    ? 'bg-[#8e1e12] text-[#fff9ea] font-bold shadow-xs'
-                    : 'bg-[#ede0c4]/80 text-[#5a3a18] border border-[#c8b492]/60 hover:bg-[#fffdf4]'
-                }`}
-              >
-                {lm.name.replace('El ', '').replace('Río ', '')}
-              </button>
-            ))}
-          </div>
+            </p>
+          </aside>
+          <MapSideVines side="right" />
         </div>
       )}
 
-      {/* ══════ NAVEGACIÓN INFERIOR CLÁSICA ESPACIADA ══════ */}
-      <div className="absolute bottom-5 md:bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-6 md:gap-8 z-20">
+      <div
+        className="absolute left-1/2 -translate-x-1/2 flex items-center gap-6 md:gap-8 z-40"
+        style={{
+          bottom: 'max(3.25rem, calc(2.1rem + env(safe-area-inset-bottom, 0px)))',
+        }}
+      >
         <button
           onClick={() => setPage('main')}
           className="text-[10px] sm:text-[11px] font-mono tracking-[0.3em] uppercase transition-colors cursor-pointer"

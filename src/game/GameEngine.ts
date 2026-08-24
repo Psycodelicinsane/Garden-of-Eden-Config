@@ -1,17 +1,31 @@
 import * as THREE from 'three';
 import { GameState } from '../App';
+import { headingFromPlayerRotation, shouldPublishCompass } from './compass';
 import { emitScoreIfChanged } from './score';
+import { awardSteleScore } from './steleVisit';
 import {
   LILITH_SHOVE_DISTANCE_SQ,
   chooseInteractionTarget,
 } from './interactionTarget';
+import { EdenRabbits } from './rabbits';
+import { classifyDecorTree } from './forestKind';
+import { finishInstances, makeInstanced, setInstance } from './instancedProps';
+import { GRASS_TUFT_BUDGET, ROCK_BUDGET } from './perfBudget';
 import {
+  BERRY_BUSH_COUNT,
   EDEN_LANDMARKS,
-  RIVER_HALF_WIDTH,
+  FOREST_TREE_COUNT,
+  RIVER_BRANCHES,
+  RIVER_SURFACE_Y,
+  WATERFALL,
   isFruitTreeIndex,
+  isMeadow,
   isMountainCore,
+  isUnreachableHighland,
+  isWaterfallZone,
   mountainHeight,
-  riverCenterZ,
+  nearestRiver,
+  riverDistance,
 } from './worldLayout';
 
 interface EdenStele {
@@ -32,6 +46,7 @@ interface GameCallbacks {
   onAdamThought?: (text: string) => void;
   onPromptUpdate?: (prompt: string | null) => void;
   onCompassUpdate?: (yawDeg: number, playerX: number, playerZ: number) => void;
+  onUnderwater?: (under: boolean) => void;
 }
 
 const RENDER_SCALE = 0.48;
@@ -261,6 +276,10 @@ export class GameEngine {
   private playerHeight = 1.7;
   private playerSpeed = 5;
   private playerSprintSpeed = 9;
+  private flyMode = false;
+  private flyKeyHeld = false;
+  private readonly flySpeedMul = 48;
+  private readonly flyVerticalSpeed = 165;
   private playerPosition: THREE.Vector3;
   private playerRotation = 0;
   private verticalRotation = 0;
@@ -282,6 +301,12 @@ export class GameEngine {
   // Vectores reutilizados para evitar crear objetos durante gameplay.
   private inputVector = new THREE.Vector3();
   private inspectWorldPosition = new THREE.Vector3();
+  private camDir = new THREE.Vector3();
+  private tmpTo = new THREE.Vector3();
+  private lastCompassAt = -1;
+  private lastCompassYaw = -999;
+  private lastCompassX = 0;
+  private lastCompassZ = 0;
 
   private keys: Record<string, boolean> = {};
   private mouseMovement = { x: 0, y: 0 };
@@ -419,7 +444,9 @@ export class GameEngine {
   private discoverables: Array<{ mesh: THREE.Object3D; id: string; discovered: boolean }> = [];
   private elapsedTotal = 0;
   private terrainMesh: THREE.Mesh | null = null;
-  private riverMesh: THREE.Mesh | null = null;
+  private riverMeshes: THREE.Mesh[] = [];
+  private waterfallSheets: THREE.Mesh[] = [];
+  private underwater = false;
 
   // Registros
   private regDistance = 0;
@@ -429,6 +456,8 @@ export class GameEngine {
   private wasSprinting = false;
   private lastPos = new THREE.Vector3();
   private regenTick = 0;
+
+  private rabbits: EdenRabbits | null = null;
 
   // Mariposas
   private butterflies: Array<{
@@ -488,7 +517,7 @@ export class GameEngine {
 
     // Sin niebla: el plano lejano se aleja para que el jardín llegue entero
     // hasta el horizonte y nada aparezca recortado.
-    this.camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 1200);
+    this.camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 2400);
     this.camera.rotation.order = 'YXZ';
 
     this.setupEventListeners();
@@ -538,6 +567,7 @@ export class GameEngine {
       this.camera.lookAt(0, 7, 0);
       this.animateApples(t);
       this.updateButterflies(t);
+      this.rabbits?.update(1 / 60, t, this.camera.position.x, this.camera.position.z);
       this.updateRiver(t);
       this.updateClouds(t);
       this.updateSky();
@@ -649,6 +679,8 @@ export class GameEngine {
     this.targetHeight = this.playerHeight;
     this.velocityY = 0;
     this.isGrounded = true;
+    this.flyMode = false;
+    this.flyKeyHeld = false;
     this.lastPos.copy(this.playerPosition);
 
     this.regDistance = 0;
@@ -770,12 +802,7 @@ export class GameEngine {
   // ═══ RÍO ═══
   // El recorrido se define mediante puntos de control en worldLayout.ts para
   // reproducir las grandes curvas del mapa ilustrado al norte del claro.
-  private readonly riverHalfWidth = RIVER_HALF_WIDTH;
-  private readonly riverBedDepth = 2.8;
 
-  private riverCenterZ(x: number) {
-    return riverCenterZ(x);
-  }
 
   // Terreno base SIN modificar por el río
   private getBaseTerrainHeight(x: number, z: number) {
@@ -788,16 +815,16 @@ export class GameEngine {
     ) * flat;
     h += this.sstep(150, 235, d) * 7;
     const far = this.sstep(260, 900, d);
-    h += far * (26 + Math.sin(x * 0.006) * Math.cos(z * 0.005) * 14 + Math.sin(d * 0.012) * 9);
-    // Cumbres compactas en oeste, suroeste y sureste, como en el mapa.
-    h += mountainHeight(x, z);
+    const nearRiver = riverDistance(x, z);
+    const keepFlat = this.sstep(170, 40, nearRiver);
+    h += far * (26 + Math.sin(x * 0.006) * Math.cos(z * 0.005) * 14 + Math.sin(d * 0.012) * 9) * (1 - keepFlat);
+    h *= 1 - keepFlat;
+    if (nearRiver > 140 || x > WATERFALL.x + 12) h += mountainHeight(x, z);
     return h;
   }
 
-  private riverSurface(x: number) {
-    const baseLevel = this.getBaseTerrainHeight(x, this.riverCenterZ(x)) - this.riverBedDepth;
-    const tilt = -(x / 1300) * 0.8;
-    return baseLevel + tilt + 2.2;
+  private riverSurface(_x?: number, _z?: number) {
+    return RIVER_SURFACE_Y;
   }
 
   private buildWorld() {
@@ -816,14 +843,24 @@ export class GameEngine {
     this.createSkyAndSun();
     this.createTerrain();
     this.createRiver();
+    this.createWaterfall();
     this.createAppleTree();
-    this.createForest(240);
+    this.createForest(FOREST_TREE_COUNT);
     this.createFlora();
     this.createDiscoverables();
     this.createButterflies(11);
     this.createClouds(9);
     this.createLandmarks();
     this.buildLilith();
+    this.rabbits = new EdenRabbits(
+      this.scene,
+      (x, z) => this.getTerrainHeight(x, z),
+      (x, z) => this.collisionBodies.some(b => {
+        const dx = x - b.x;
+        const dz = z - b.z;
+        return dx * dx + dz * dz < (b.radius + 1.2) * (b.radius + 1.2);
+      }),
+    );
   }
 
   private createLights() {
@@ -937,26 +974,22 @@ export class GameEngine {
   getTerrainHeight(x: number, z: number) {
     let h = this.getBaseTerrainHeight(x, z);
 
-    // ─ RÍO SERPENTEANTE ──
-    const rd = Math.abs(z - this.riverCenterZ(x));
-    if (rd < 35) {
-      const waterY = this.riverSurface(x);
-      const bankH = waterY + 0.6;
-      
-      // Orillas que suben por encima del agua
-      const valley = this.sstep(35, this.riverHalfWidth, rd);
+    const hit = nearestRiver(x, z);
+    const bankReach = hit.halfWidth + 22;
+    if (hit.dist < bankReach) {
+      const waterY = this.riverSurface(hit.x, hit.z);
+      const bankH = waterY + 0.9;
+      const valley = this.sstep(bankReach, hit.halfWidth + 2.5, hit.dist);
       h = h * (1 - valley) + bankH * valley;
-      
-      // Cauce plano donde está el agua
-      const carve = this.sstep(this.riverHalfWidth, 2, rd);
-      h = h * (1 - carve) + (waterY - 1.5) * carve;
+      const carve = this.sstep(hit.halfWidth + 1.2, 1.4, hit.dist);
+      h = h * (1 - carve) + (waterY - 1.65) * carve;
     }
     return h;
   }
 
   private createTerrain() {
     // Aumento de resolución (320 segmentos) para que el río no se "pierda" entre vértices.
-    const size = 2600;
+    const size = 3400;
     const seg = 320; 
     const geo = new THREE.PlaneGeometry(size, size, seg, seg);
     geo.rotateX(-Math.PI / 2);
@@ -976,37 +1009,151 @@ export class GameEngine {
     this.scene.add(this.terrainMesh);
   }
 
+
   private createRiver() {
-    const verts: number[] = [];
-    const uvs: number[] = [];
-    const idx: number[] = [];
-    let row = 0;
-    const half = this.riverHalfWidth;
-    for (let x = -1300; x <= 1300; x += 4) {
-      const y = this.riverSurface(x);
-      const cz = this.riverCenterZ(x);
-      verts.push(x, y, cz - half, x, y, cz + half);
-      uvs.push(x * 0.05, 0, x * 0.05, 1);
-      if (row > 0) {
-        const a = (row - 1) * 2;
-        idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    this.riverMeshes = [];
+    for (const branch of RIVER_BRANCHES) {
+      const samples: Array<{ x: number; z: number }> = [];
+      for (let i = 0; i < branch.points.length - 1; i++) {
+        const a = branch.points[i];
+        const b = branch.points[i + 1];
+        const len = Math.hypot(b.x - a.x, b.z - a.z);
+        const steps = Math.max(1, Math.ceil(len / 5));
+        for (let s = 0; s < steps; s++) {
+          const t = s / steps;
+          samples.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+        }
       }
-      row++;
+      samples.push(branch.points[branch.points.length - 1]);
+
+      const verts: number[] = [];
+      const uvs: number[] = [];
+      const idx: number[] = [];
+      const half = branch.halfWidth;
+      for (let i = 0; i < samples.length; i++) {
+        const pt = samples[i];
+        const prev = samples[Math.max(0, i - 1)];
+        const next = samples[Math.min(samples.length - 1, i + 1)];
+        let tx = next.x - prev.x;
+        let tz = next.z - prev.z;
+        const tl = Math.hypot(tx, tz) || 1;
+        tx /= tl;
+        tz /= tl;
+        const nx = -tz;
+        const nz = tx;
+        const y = this.riverSurface(pt.x, pt.z);
+        verts.push(pt.x + nx * half, y, pt.z + nz * half, pt.x - nx * half, y, pt.z - nz * half);
+        uvs.push(i * 0.18, 0, i * 0.18, 1);
+        if (i > 0) {
+          const a = (i - 1) * 2;
+          idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      const mat = new THREE.MeshLambertMaterial({
+        map: this.waterTex!.clone(),
+        color: 0x4aa4e0,
+        transparent: false,
+        depthWrite: true,
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -4,
+        side: THREE.DoubleSide,
+      });
+      (mat.map as THREE.Texture).wrapS = THREE.RepeatWrapping;
+      (mat.map as THREE.Texture).wrapT = THREE.RepeatWrapping;
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.renderOrder = 3;
+      this.scene.add(mesh);
+      this.riverMeshes.push(mesh);
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geo.setIndex(idx);
-    geo.computeVertexNormals();
-    const mat = new THREE.MeshPhongMaterial({
-      map: this.waterTex!,
-      transparent: true,
-      opacity: 0.92,
-      shininess: 90,
-      specular: 0x88bbee,
-    });
-    this.riverMesh = new THREE.Mesh(geo, mat);
-    this.scene.add(this.riverMesh);
+  }
+
+
+  private createWaterfall() {
+    const poolX = WATERFALL.x;
+    const poolZ = WATERFALL.z;
+    const lipX = WATERFALL.lipX;
+    const waterY = this.riverSurface();
+    const drop = WATERFALL.height;
+    const topY = waterY + drop;
+    const group = new THREE.Group();
+    group.position.set(poolX, 0, poolZ);
+
+    const rockMat = new THREE.MeshLambertMaterial({ color: 0x7a756c, flatShading: true });
+    const darkRock = new THREE.MeshLambertMaterial({ color: 0x4a4540, flatShading: true });
+    const mossMat = new THREE.MeshLambertMaterial({ color: 0x3d6828, flatShading: true });
+
+    const addRock = (px: number, py: number, pz: number, sx: number, sy: number, sz: number, mat: THREE.Material) => {
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), mat);
+      rock.position.set(px, py, pz);
+      rock.scale.set(sx, sy, sz);
+      rock.rotation.set(px * 0.03, py * 0.05, pz * 0.04);
+      rock.castShadow = true;
+      group.add(rock);
+    };
+
+    const faceX = lipX - poolX;
+    for (let i = -10; i <= 10; i++) {
+      addRock(faceX + 8, topY * 0.48, i * 5.4, 9, drop * 0.62, 6.2, i % 2 ? rockMat : darkRock);
+      addRock(faceX + 2, topY - 10, i * 4.2, 4.4, 22, 3.6, i % 3 ? darkRock : rockMat);
+      addRock(faceX - 1, topY + 1.2, i * 3.6, 3.2, 2.4, 2.6, mossMat);
+      addRock(10, waterY + 2.2, i * 3.4, 2.2, 4.2, 2.0, i % 3 === 0 ? mossMat : rockMat);
+    }
+    for (let k = 0; k < 8; k++) {
+      addRock(faceX + 28 + k * 14, topY - 4 + (k % 3) * 6, (k - 3.5) * 12, 16, 18, 14, k % 2 ? darkRock : rockMat);
+    }
+
+    const pool = new THREE.Mesh(
+      new THREE.CircleGeometry(28, 24),
+      new THREE.MeshLambertMaterial({ color: 0x3d96d4, map: this.waterTex!, side: THREE.DoubleSide }),
+    );
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(-2, waterY + 0.06, 0);
+    group.add(pool);
+
+    const mkSheet = (w: number, h: number, px: number, py: number, pz: number, lean: number, opacity: number, rep: number) => {
+      const tex = this.waterTex!.clone();
+      tex.needsUpdate = true;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(1.2, rep);
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        color: 0xc8eefe,
+        transparent: true,
+        opacity,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const sheet = new THREE.Mesh(new THREE.PlaneGeometry(w, h, 1, 14), mat);
+      sheet.position.set(px, py, pz);
+      sheet.rotation.order = 'YXZ';
+      sheet.rotation.y = Math.PI / 2;
+      sheet.rotation.x = lean;
+      group.add(sheet);
+      this.waterfallSheets.push(sheet);
+    };
+
+    const midX = (lipX - poolX) * 0.42;
+    mkSheet(WATERFALL.width, drop + 3, midX, waterY + drop * 0.52, 0, 0.08, 0.88, 4.2);
+    mkSheet(WATERFALL.width * 0.7, drop * 0.95, midX + 1.4, waterY + drop * 0.5, -3.8, 0.12, 0.55, 3.4);
+    mkSheet(WATERFALL.width * 0.55, drop * 0.82, midX + 0.6, waterY + drop * 0.44, 4.2, 0.1, 0.48, 3.0);
+
+    const foam = new THREE.Mesh(
+      new THREE.CircleGeometry(9, 16),
+      new THREE.MeshBasicMaterial({ color: 0xf4fbff, transparent: true, opacity: 0.5, depthWrite: false }),
+    );
+    foam.rotation.x = -Math.PI / 2;
+    foam.position.set(3, waterY + 0.28, 0);
+    group.add(foam);
+
+    this.collisionBodies.push({ x: lipX - 2, z: poolZ, radius: 16 });
+    this.scene.add(group);
   }
 
   private createAppleTree() {
@@ -1102,32 +1249,35 @@ export class GameEngine {
     const fruitLeafMat = new THREE.MeshLambertMaterial({ map: this.leafTex!, color: 0x9fd46a, flatShading: true });
     const fruitMat = new THREE.MeshLambertMaterial({ color: 0xff8c2a, emissive: 0x552200, emissiveIntensity: 0.45 });
 
+    type Inst = { x: number; y: number; z: number; sx: number; sy: number; sz: number; rx: number; ry: number; rz: number };
+    const mk = (x: number, y: number, z: number, sx: number, sy: number, sz: number, rx = 0, ry = 0, rz = 0): Inst =>
+      ({ x, y, z, sx, sy, sz, rx, ry, rz });
+    const trunks: Inst[] = [];
+    const crowns: Inst[] = [];
+    const cones: Inst[] = [];
+    const palmLeaves: Inst[] = [];
+    const palmCaps: Inst[] = [];
+
     let placed = 0;
     let guard = 0;
     while (placed < count && guard < count * 30) {
       guard++;
       const isFruitTree = isFruitTreeIndex(placed);
-      const x = this.rand() * 840 - 420;
-      const z = this.rand() * 840 - 420;
+      const x = this.rand() * 1800 - 900;
+      const z = this.rand() * 1800 - 900;
       const d = Math.sqrt(x * x + z * z);
 
-      // El bosque denso forma un cinturón exterior. Los frutales sí aparecen
-      // dentro del jardín, pero dejan libre el claro del Árbol del Conocimiento.
-      if (d < (isFruitTree ? 42 : 190)) continue;
-      if (Math.abs(z - this.riverCenterZ(x)) < 28) continue;
-      // Las cumbres quedan despejadas para que las montañas se lean a distancia.
+      if (isMeadow(x, z) && !isFruitTree) continue;
+      if (d < (isFruitTree ? 42 : 200)) continue;
+      if (riverDistance(x, z) < 32 || isWaterfallZone(x, z)) continue;
       if (isMountainCore(x, z)) continue;
 
       const y = this.getTerrainHeight(x, z);
-      const tree = new THREE.Group();
-      tree.position.set(x, y, z);
-
-      // Cada cuarto árbol es frutal: 60 de los 240 árboles totales.
       const s = 0.75 + this.rand() * 0.85;
 
       if (isFruitTree) {
-        // El tronco penetra ampliamente en la copa: así las caras angulosas del
-        // icosaedro no pueden dejar un hueco visible entre madera y follaje.
+        const tree = new THREE.Group();
+        tree.position.set(x, y, z);
         const trunkHeight = 2.35 * s;
         const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.30 * s, trunkHeight, 5), barkMat);
         trunk.position.y = trunkHeight / 2;
@@ -1141,8 +1291,6 @@ export class GameEngine {
         crown.castShadow = true;
         tree.add(crown);
 
-        // Frutos colgando — recolectables. Se apoyan sobre la piel de la copa
-        // (elipsoide 1.485 × 1.1475 × 1.485) para que nunca queden en el aire.
         tree.userData.removedFruits = [];
         const crownRXZ = 1.35 * 1.1 * s;
         const crownRY = 1.35 * 0.85 * s;
@@ -1150,7 +1298,7 @@ export class GameEngine {
         for (let f = 0; f < nF; f++) {
           const fr = new THREE.Mesh(new THREE.SphereGeometry(0.15 * s, 6, 5), fruitMat);
           const ang = (f / nF) * Math.PI * 2 + this.rand() * 0.7;
-          const el = -0.2 - this.rand() * 0.55; // cuelgan de la mitad inferior
+          const el = -0.2 - this.rand() * 0.55;
           const cosEl = Math.cos(el);
           fr.position.set(
             Math.cos(ang) * cosEl * crownRXZ * 0.80,
@@ -1162,67 +1310,106 @@ export class GameEngine {
           tree.add(fr);
         }
         this.harvestables.push(tree);
-      } else if (this.rand() > 0.25) {
-        // Árbol redondo (más abundante, como en el mapa de la imagen)
-        const nBlobs = 2 + Math.floor(this.rand() * 2);
-        const trunkH = (2.4 + this.rand() * 1.1) * s;
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * s, 0.38 * s, trunkH, 6), barkMat);
-        trunk.position.y = trunkH / 2;
-        trunk.castShadow = true;
-        tree.add(trunk);
-        for (let b = 0; b < nBlobs; b++) {
-          const br = (1.0 + this.rand() * 0.8) * s;
-          const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(br, 0), leafMat);
-          blob.position.set(
-            (this.rand() - 0.5) * 1.6 * s,
-            trunkH + (0.3 + this.rand() * 0.9) * s,
-            (this.rand() - 0.5) * 1.6 * s
-          );
-          blob.rotation.set(this.rand() * 3, this.rand() * 3, this.rand() * 3);
-          blob.castShadow = true;
-          tree.add(blob);
-        }
+        this.collisionBodies.push({ x, z, radius: 0.5 * s });
+        this.scene.add(tree);
       } else {
-        // Conífera — conos apilados, muy PS2
-        const trunkH = 1.5 * s;
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * s, 0.26 * s, trunkH, 5), barkMat);
-        trunk.position.y = trunkH / 2;
-        trunk.castShadow = true;
-        tree.add(trunk);
-        const tiers = 3;
-        for (let ti = 0; ti < tiers; ti++) {
-          const cr = (1.45 - ti * 0.38) * s;
-          const cone = new THREE.Mesh(new THREE.ConeGeometry(cr, 1.5 * s, 6), leafMat);
-          cone.position.y = trunkH + (0.6 + ti * 0.85) * s;
-          cone.rotation.y = this.rand() * 3;
-          cone.castShadow = true;
-          tree.add(cone);
+        const kind = classifyDecorTree(x, z, this.rand(), this.rand());
+        if (kind === 'palm') {
+          const trunkH = (4.2 + this.rand() * 1.8) * s;
+          trunks.push(mk(x, y + trunkH / 2, z, 0.7 * s, trunkH, 0.7 * s, 0, this.rand() * 3, 0));
+          for (let b = 0; b < 5; b++) {
+            palmLeaves.push(mk(x, y + trunkH, z, 0.18 * s, 1.6 * s, 0.18 * s, 0, (b / 5) * Math.PI * 2, 0.95));
+          }
+          palmCaps.push(mk(x, y + trunkH + 0.15 * s, z, 0.55 * s, 0.55 * s, 0.55 * s));
+        } else if (kind === 'round') {
+          const nBlobs = 2 + Math.floor(this.rand() * 2);
+          const trunkH = (2.4 + this.rand() * 1.1) * s;
+          trunks.push(mk(x, y + trunkH / 2, z, s, trunkH, s, 0, this.rand() * 3, 0));
+          for (let b = 0; b < nBlobs; b++) {
+            const br = (1.0 + this.rand() * 0.8) * s;
+            crowns.push(mk(
+              x + (this.rand() - 0.5) * 1.6 * s,
+              y + trunkH + (0.3 + this.rand() * 0.9) * s,
+              z + (this.rand() - 0.5) * 1.6 * s,
+              br, br, br,
+              this.rand() * 3, this.rand() * 3, this.rand() * 3,
+            ));
+          }
+        } else {
+          const trunkH = 1.5 * s;
+          trunks.push(mk(x, y + trunkH / 2, z, 0.85 * s, trunkH, 0.85 * s));
+          for (let ti = 0; ti < 3; ti++) {
+            const cr = (1.45 - ti * 0.38) * s;
+            cones.push(mk(x, y + trunkH + (0.6 + ti * 0.85) * s, z, cr, 1.5 * s, cr, 0, this.rand() * 3, 0));
+          }
         }
+        this.collisionBodies.push({ x, z, radius: 0.5 * s });
       }
-
-      this.collisionBodies.push({ x, z, radius: 0.5 * s });
-      this.scene.add(tree);
       placed++;
     }
+
+    const addBatch = (geo: THREE.BufferGeometry, mat: THREE.Material, items: Inst[]) => {
+      if (items.length === 0) {
+        geo.dispose();
+        return;
+      }
+      const mesh = makeInstanced(geo, mat, items.length);
+      for (let i = 0; i < items.length; i++) {
+        const p = items[i];
+        setInstance(mesh, i, p.x, p.y, p.z, p.sx, p.sy, p.sz, p.rx, p.ry, p.rz);
+      }
+      finishInstances(mesh, items.length);
+      this.scene.add(mesh);
+    };
+
+    addBatch(new THREE.CylinderGeometry(0.18, 0.32, 1, 6), barkMat, trunks);
+    addBatch(new THREE.IcosahedronGeometry(1, 0), leafMat, crowns);
+    addBatch(new THREE.ConeGeometry(1, 1, 6), leafMat, cones);
+    addBatch(new THREE.ConeGeometry(1, 1, 4), leafMat, palmLeaves);
+    addBatch(new THREE.IcosahedronGeometry(1, 0), leafMat, palmCaps);
   }
 
   private createFlora() {
-    // Hierba cruzada — planos dobles con verde intenso
     const bladeMat = new THREE.MeshLambertMaterial({ color: 0x4a9a2f, side: THREE.DoubleSide });
-    const bladeGeo = new THREE.PlaneGeometry(0.55, 0.4);
-    for (let i = 0; i < 660; i++) {
-      const x = this.rand() * 700 - 350;
-      const z = this.rand() * 700 - 350;
-      if (Math.abs(z - this.riverCenterZ(x)) < 18) continue;
-      const tuft = new THREE.Group();
-      const b1 = new THREE.Mesh(bladeGeo, bladeMat);
-      const b2 = new THREE.Mesh(bladeGeo, bladeMat);
-      b2.rotation.y = Math.PI / 2;
-      tuft.add(b1);
-      tuft.add(b2);
-      tuft.position.set(x, this.getTerrainHeight(x, z) + 0.18, z);
-      tuft.rotation.y = this.rand() * Math.PI;
-      this.scene.add(tuft);
+    const grass = makeInstanced(new THREE.PlaneGeometry(0.55, 0.4), bladeMat, GRASS_TUFT_BUDGET * 2);
+    let grassUsed = 0;
+    for (let i = 0; i < GRASS_TUFT_BUDGET; i++) {
+      const x = this.rand() * 1100 - 550;
+      const z = this.rand() * 1100 - 550;
+      if (riverDistance(x, z) < 18) continue;
+      const y = this.getTerrainHeight(x, z) + 0.18;
+      const rot = this.rand() * Math.PI;
+      setInstance(grass, grassUsed++, x, y, z, 1, 1, 1, 0, rot, 0);
+      setInstance(grass, grassUsed++, x, y, z, 1, 1, 1, 0, rot + Math.PI / 2, 0);
+    }
+    finishInstances(grass, grassUsed);
+    this.scene.add(grass);
+
+    // Corona de flores del claro, como el anillo de la carta.
+    const ringPetals = ['#ff88aa', '#ffee66', '#ffffff', '#ff9944', '#cc88ff'];
+    for (let i = 0; i < 86; i++) {
+      const ang = (i / 86) * Math.PI * 2 + this.rand() * 0.08;
+      const rad = 20 + this.rand() * 9;
+      const x = Math.cos(ang) * rad;
+      const z = Math.sin(ang) * rad;
+      if (riverDistance(x, z) < 16) continue;
+      const y = this.getTerrainHeight(x, z);
+      const f = new THREE.Group();
+      const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.012, 0.016, 0.3, 4),
+        new THREE.MeshLambertMaterial({ color: 0x2d6a18 })
+      );
+      stem.position.y = 0.15;
+      f.add(stem);
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.055, 5, 4),
+        new THREE.MeshLambertMaterial({ color: ringPetals[Math.floor(this.rand() * ringPetals.length)] })
+      );
+      head.position.y = 0.32;
+      head.scale.set(1, 0.6, 1);
+      f.add(head);
+      f.position.set(x, y, z);
+      this.scene.add(f);
     }
 
     // Flores silvestres
@@ -1230,7 +1417,7 @@ export class GameEngine {
     for (let i = 0; i < 70; i++) {
       const x = this.rand() * 360 - 180;
       const z = this.rand() * 360 - 180;
-      if (Math.abs(z - this.riverCenterZ(x)) < 18) continue;
+      if (riverDistance(x, z) < 18) continue;
       const y = this.getTerrainHeight(x, z);
       const f = new THREE.Group();
       const stem = new THREE.Mesh(
@@ -1253,12 +1440,16 @@ export class GameEngine {
     // ── ARBUSTOS DE BAYAS ── recolectables, con los frutos sobre el follaje
     const bushLeafMat = new THREE.MeshLambertMaterial({ map: this.leafTex!, color: 0x7ab648, flatShading: true });
     const berryColors = [0x8e2f5e, 0xc0304a, 0x4b3fa8, 0xd2542c];
-    for (let i = 0; i < 34; i++) {
-      const x = this.rand() * 420 - 210;
-      const z = this.rand() * 420 - 210;
+    let bushesPlaced = 0;
+    let bushGuard = 0;
+    while (bushesPlaced < BERRY_BUSH_COUNT && bushGuard < BERRY_BUSH_COUNT * 40) {
+      bushGuard++;
+      const x = this.rand() * 800 - 400;
+      const z = this.rand() * 800 - 400;
       const d = Math.sqrt(x * x + z * z);
       if (d < 12) continue;
-      if (Math.abs(z - this.riverCenterZ(x)) < 18) continue;
+      if (riverDistance(x, z) < 18) continue;
+      if (isMountainCore(x, z) || isWaterfallZone(x, z)) continue;
       const y = this.getTerrainHeight(x, z);
 
       const bush = new THREE.Group();
@@ -1306,25 +1497,23 @@ export class GameEngine {
 
       this.scene.add(bush);
       this.harvestables.push(bush);
+      bushesPlaced++;
     }
 
-    // Rocas suaves — solo las grandes colisionan
     const rockMat = new THREE.MeshLambertMaterial({ color: 0x8b8f96, flatShading: true });
-    for (let i = 0; i < 26; i++) {
+    const rocks = makeInstanced(new THREE.DodecahedronGeometry(1, 0), rockMat, ROCK_BUDGET);
+    let rockUsed = 0;
+    for (let i = 0; i < ROCK_BUDGET; i++) {
       const x = this.rand() * 640 - 320;
       const z = this.rand() * 640 - 320;
       if (Math.sqrt(x * x + z * z) < 14) continue;
-      const rd = Math.abs(z - this.riverCenterZ(x));
-      if (rd < 18) continue;
+      if (riverDistance(x, z) < 18) continue;
       const r = 0.4 + this.rand() * 0.75;
-      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), rockMat);
-      rock.position.set(x, this.getTerrainHeight(x, z) + r * 0.35, z);
-      rock.scale.y = 0.75;
-      rock.rotation.y = this.rand() * 3;
-      rock.castShadow = true;
-      this.scene.add(rock);
+      setInstance(rocks, rockUsed++, x, this.getTerrainHeight(x, z) + r * 0.35, z, r, r * 0.75, r, 0, this.rand() * 3, 0);
       if (r > 0.75) this.collisionBodies.push({ x, z, radius: r * 0.9 });
     }
+    finishInstances(rocks, rockUsed);
+    this.scene.add(rocks);
   }
 
   private createDiscoverables() {
@@ -1509,6 +1698,17 @@ export class GameEngine {
         group.add(crown);
 
         this.collisionBodies.push({ x: lm.x, z: lm.z, radius: 1.4 });
+      } else if (lm.type === 'waterfall') {
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 0.4, 6), steleMat);
+        base.position.y = 0.2;
+        group.add(base);
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.8, 0.34), steleMat);
+        pillar.position.y = 1.15;
+        group.add(pillar);
+        const rune = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.7), runeMat);
+        rune.position.set(0, 1.2, 0.19);
+        group.add(rune);
+        this.collisionBodies.push({ x: lm.x, z: lm.z, radius: 0.85 });
       } else {
         const base = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 0.4, 6), steleMat);
         base.position.y = 0.2;
@@ -1540,12 +1740,36 @@ export class GameEngine {
   }
 
   private updateRiver(t: number) {
-    if (this.riverMesh) {
-      const mat = this.riverMesh.material as THREE.MeshPhongMaterial;
-      if (mat.map) {
-        mat.map.offset.x = t * 0.045;
-      }
+    for (const mesh of this.riverMeshes) {
+      const mat = mesh.material as THREE.MeshLambertMaterial;
+      if (mat.map) mat.map.offset.x = t * 0.055;
     }
+    for (const sheet of this.waterfallSheets) {
+      const mat = sheet.material as THREE.MeshBasicMaterial;
+      if (mat.map) mat.map.offset.y = -t * 0.7;
+    }
+  }
+
+  private updateUnderwater() {
+    const hit = nearestRiver(this.camera.position.x, this.camera.position.z);
+    const waterY = this.riverSurface(hit.x, hit.z);
+    const headIn = hit.dist < hit.halfWidth - 0.4 && this.camera.position.y < waterY - 0.08;
+    if (headIn === this.underwater) return;
+    this.underwater = headIn;
+    if (headIn) {
+      this.renderer.setClearColor(0x063a68);
+      this.scene.background = new THREE.Color(0x063a68);
+      this.scene.fog = new THREE.FogExp2(0x0a5a96, 0.16);
+      if (this.skyGroup) this.skyGroup.visible = false;
+      if (this.sunSprite) this.sunSprite.visible = false;
+    } else {
+      this.renderer.setClearColor(0x8acaf0);
+      this.scene.background = null;
+      this.scene.fog = null;
+      if (this.skyGroup) this.skyGroup.visible = true;
+      if (this.sunSprite) this.sunSprite.visible = true;
+    }
+    this.callbacks.onUnderwater?.(headIn);
   }
 
   private updateSky() {
@@ -2567,6 +2791,11 @@ export class GameEngine {
         z = lz + (dz / d) * r;
       }
     }
+    if (this.rabbits) {
+      const r = this.rabbits.resolvePlayer(x, z, this.playerRadius);
+      x = r.x;
+      z = r.z;
+    }
     return { x, z };
   }
 
@@ -2584,8 +2813,8 @@ export class GameEngine {
       }
     }
     // Límites del mundo
-    x = Math.max(-230, Math.min(230, x));
-    z = Math.max(-230, Math.min(230, z));
+    x = Math.max(-620, Math.min(620, x));
+    z = Math.max(-620, Math.min(620, z));
     return { x, z };
   }
 
@@ -2741,7 +2970,9 @@ export class GameEngine {
         this.updateRiver(this.elapsedTotal);
         this.updateClouds(this.elapsedTotal);
         this.updateLilith(delta);
+        this.rabbits?.update(delta, this.elapsedTotal, this.playerPosition.x, this.playerPosition.z);
         this.updateSky();
+        this.updateUnderwater();
       }
       this.renderer.render(this.scene, this.camera);
     };
@@ -2891,7 +3122,9 @@ export class GameEngine {
     const groundH = Math.max(this.getTerrainHeight(0, -20), 0);
     const standY = this.playerHeight + groundH;
 
-    this.callbacks.onCinematicUpdate?.(t);
+    if (this.cinematicTime <= delta || t >= 1 || Math.floor(t * 20) !== Math.floor((t - delta / dur) * 20)) {
+      this.callbacks.onCinematicUpdate?.(t);
+    }
 
     if (t < 1) {
       if (t < 0.15) {
@@ -3007,22 +3240,40 @@ export class GameEngine {
   }
 
   private updatePromptsAndCompass() {
-    const yawDeg = ((-this.playerRotation * 180 / Math.PI) % 360 + 360) % 360;
-    this.callbacks.onCompassUpdate?.(yawDeg, this.playerPosition.x, this.playerPosition.z);
+    const yawDeg = headingFromPlayerRotation(this.playerRotation);
+    if (
+      shouldPublishCompass(
+        this.elapsedTotal,
+        this.lastCompassAt,
+        0.12,
+        yawDeg,
+        this.lastCompassYaw,
+        this.playerPosition.x,
+        this.playerPosition.z,
+        this.lastCompassX,
+        this.lastCompassZ,
+      )
+    ) {
+      this.lastCompassAt = this.elapsedTotal;
+      this.lastCompassYaw = yawDeg;
+      this.lastCompassX = this.playerPosition.x;
+      this.lastCompassZ = this.playerPosition.z;
+      this.callbacks.onCompassUpdate?.(yawDeg, this.playerPosition.x, this.playerPosition.z);
+    }
 
-    const camDir = new THREE.Vector3();
-    this.camera.getWorldDirection(camDir);
+    this.camera.getWorldDirection(this.camDir);
+    const camDir = this.camDir;
 
     let prompt: string | null = null;
 
     // 1. Lilith (requiere apuntar exactamente a su cuerpo en el centro de la pantalla)
     if (this.lilithGroup) {
-      const lilithChest = new THREE.Vector3(
+      this.tmpTo.set(
         this.lilithGroup.position.x,
         this.lilithGroup.position.y + 1.1,
-        this.lilithGroup.position.z
-      );
-      const toL = new THREE.Vector3().subVectors(lilithChest, this.camera.position);
+        this.lilithGroup.position.z,
+      ).sub(this.camera.position);
+      const toL = this.tmpTo;
       const distL = toL.length();
       toL.normalize();
       const dotL = camDir.dot(toL);
@@ -3033,8 +3284,8 @@ export class GameEngine {
 
     // 2. Árbol del Conocimiento (requiere estar mirando directamente al tronco/centro)
     if (!prompt && this.appleTree) {
-      const treePos = new THREE.Vector3(0, 2.5, 0);
-      const toT = new THREE.Vector3().subVectors(treePos, this.camera.position);
+      this.tmpTo.set(0, 2.5, 0).sub(this.camera.position);
+      const toT = this.tmpTo;
       const distT = toT.length();
       toT.normalize();
       const dotT = camDir.dot(toT);
@@ -3046,8 +3297,8 @@ export class GameEngine {
     // 3. Hitos de los Cuatro Ríos y Santuarios (requiere mirar directamente a la estela)
     if (!prompt) {
       for (const s of this.steles) {
-        const stelePos = new THREE.Vector3(s.group.position.x, s.group.position.y + 1.0, s.group.position.z);
-        const toS = new THREE.Vector3().subVectors(stelePos, this.camera.position);
+        this.tmpTo.set(s.group.position.x, s.group.position.y + 1.0, s.group.position.z).sub(this.camera.position);
+        const toS = this.tmpTo;
         const distS = toS.length();
         toS.normalize();
         const dotS = camDir.dot(toS);
@@ -3062,14 +3313,27 @@ export class GameEngine {
     if (!prompt) {
       for (const h of this.harvestables) {
         if (h.userData.harvested) continue;
-        const hPos = new THREE.Vector3(h.position.x, h.position.y + 1.0, h.position.z);
-        const toH = new THREE.Vector3().subVectors(hPos, this.camera.position);
+        this.tmpTo.set(h.position.x, h.position.y + 1.0, h.position.z).sub(this.camera.position);
+        const toH = this.tmpTo;
         const distH = toH.length();
         toH.normalize();
         const dotH = camDir.dot(toH);
         if (distH < 4.8 && dotH > 0.90) {
           prompt = 'Recolectar Fruto';
           break;
+        }
+      }
+    }
+
+    if (!prompt && this.rabbits) {
+      const near = this.rabbits.nearest(this.playerPosition.x, this.playerPosition.z);
+      if (near && near.dist < 5.2) {
+        const rp = near.rabbit.root.position;
+        const toR = this.tmpTo.set(rp.x, rp.y + 0.2, rp.z).sub(this.camera.position);
+        const distR = toR.length();
+        toR.normalize();
+        if (distR < 5.2 && camDir.dot(toR) > 0.88) {
+          prompt = 'Conejo del Edén';
         }
       }
     }
@@ -3110,15 +3374,24 @@ export class GameEngine {
   }
 
   private updateMovement(delta: number) {
+    const oDown = !!this.keys['o'];
+    if (oDown && !this.flyKeyHeld && this.state === 'playing') {
+      this.flyMode = !this.flyMode;
+      this.velocityY = 0;
+      this.isGrounded = !this.flyMode;
+      this.headBob = 0;
+    }
+    this.flyKeyHeld = oDown;
+
     // ═══ CORRIENTE DEL RÍO ═══
     // Si el jugador está dentro de la lámina de agua, la corriente lo arrastra suavemente hacia el Este (+X).
-    const distToRiverCenter = Math.abs(this.playerPosition.z - this.riverCenterZ(this.playerPosition.x));
-    if (distToRiverCenter < this.riverHalfWidth) {
-      const centerFactor = 1 - (distToRiverCenter / this.riverHalfWidth);
+    const riverHit = nearestRiver(this.playerPosition.x, this.playerPosition.z);
+    if (!this.flyMode && riverHit.dist < riverHit.halfWidth) {
+      const centerFactor = 1 - (riverHit.dist / riverHit.halfWidth);
       const currentStrength = 2.0 * centerFactor;
       const r = this.resolveCollisionXZ(
-        this.playerPosition.x + currentStrength * delta,
-        this.playerPosition.z
+        this.playerPosition.x + riverHit.tx * currentStrength * delta,
+        this.playerPosition.z + riverHit.tz * currentStrength * delta,
       );
       this.playerPosition.x = r.x;
       this.playerPosition.z = r.z;
@@ -3153,8 +3426,9 @@ export class GameEngine {
 
     // Sprint solo si queda saciedad
     const wantsSprint = this.keys['shift'] || this.touchSprint;
-    this.isSprinting = wantsSprint && this.food > 0;
-    const currentSpeed = (this.isSprinting ? this.playerSprintSpeed : this.playerSpeed) * delta;
+    this.isSprinting = !this.flyMode && wantsSprint && this.food > 0;
+    const walkSpeed = this.isSprinting ? this.playerSprintSpeed : this.playerSpeed;
+    const currentSpeed = walkSpeed * (this.flyMode ? this.flySpeedMul : 1) * delta;
 
     const input = this.inputVector.set(0, 0, 0);
     if (this.keys['w'] || this.keys['arrowup']) input.z = -1;
@@ -3195,13 +3469,33 @@ export class GameEngine {
       }
 
       // Límites — mapa x4
-      this.playerPosition.x = Math.max(-420, Math.min(420, this.playerPosition.x));
-      this.playerPosition.z = Math.max(-420, Math.min(420, this.playerPosition.z));
+      this.playerPosition.x = Math.max(-980, Math.min(980, this.playerPosition.x));
+      this.playerPosition.z = Math.max(-980, Math.min(980, this.playerPosition.z));
+      if (!this.flyMode && isUnreachableHighland(this.playerPosition.x, this.playerPosition.z)) {
+        this.playerPosition.x = WATERFALL.lipX - 6;
+      }
     }
 
     // ═══ SALTO Y GRAVEDAD ═══
     const terrainH = this.getTerrainHeight(this.playerPosition.x, this.playerPosition.z);
     const groundY = this.playerHeight + terrainH;
+
+    if (!this.flyMode && isUnreachableHighland(this.playerPosition.x, this.playerPosition.z)) {
+      this.playerPosition.x = WATERFALL.lipX - 6;
+    }
+
+    if (this.flyMode) {
+      const climb = this.flyVerticalSpeed * delta;
+      if (this.keys[' '] || this.touchJump) this.playerPosition.y += climb;
+      if (this.keys['z']) this.playerPosition.y -= climb;
+      this.touchJump = false;
+      const floor = groundY + 0.4;
+      this.playerPosition.y = Math.max(floor, Math.min(280, this.playerPosition.y));
+      this.targetHeight = this.playerPosition.y;
+      this.isGrounded = false;
+      this.headBob = 0;
+      return;
+    }
 
     // Suavizar la altura del terreno para evitar tirones
     this.targetHeight += (groundY - this.targetHeight) * Math.min(1, delta * 8);
@@ -3332,6 +3626,17 @@ export class GameEngine {
       treeFacing,
       lilithFacing,
     });
+
+    const inLilithShove = this.lilithGroup
+      ? lilithDistanceSq < LILITH_SHOVE_DISTANCE_SQ
+      : false;
+
+    // Recolectar frutos aunque Lilith esté cerca, si no estás en su espacio
+    // personal y el fruto está más delante que ella.
+    if (!inLilithShove) {
+      const harvested = this.tryHarvestFruit(forwardX, forwardZ, lilithFacing);
+      if (harvested) return;
+    }
 
     // 1. Interacción con LILITH (detección dinámica y objetivo explícito)
     if (this.lilithGroup && interactionTarget === 'lilith') {
@@ -3507,53 +3812,82 @@ export class GameEngine {
       const dx = this.playerPosition.x - s.group.position.x;
       const dz = this.playerPosition.z - s.group.position.z;
       if (dx * dx + dz * dz < 30) {
-        s.discovered = true;
+        const gain = awardSteleScore(s.discovered);
         this.callbacks.onAdamThought?.(`«${s.name}: ${s.desc} (${s.verse})»`);
-        this.score += 5;
-        this.emitScoreIfChanged();
-        try {
-          const reg = JSON.parse(localStorage.getItem('edenRegistry') || '{}');
-          reg[s.id] = true;
-          reg.discoveries = (reg.discoveries || 0) + 1;
-          localStorage.setItem('edenRegistry', JSON.stringify(reg));
-        } catch { /* empty */ }
+        if (gain > 0) {
+          s.discovered = true;
+          this.score += gain;
+          this.emitScoreIfChanged();
+          try {
+            const reg = JSON.parse(localStorage.getItem('edenRegistry') || '{}');
+            reg[s.id] = true;
+            reg.discoveries = (reg.discoveries || 0) + 1;
+            localStorage.setItem('edenRegistry', JSON.stringify(reg));
+          } catch { /* empty */ }
+        }
         return;
       }
     }
 
-    // 4. Recolección normal de frutas
+    // 3b. Observar un conejo (solo si está cerca y delante)
+    if (this.rabbits) {
+      const near = this.rabbits.nearest(this.playerPosition.x, this.playerPosition.z);
+      if (near && near.dist < 4.2) {
+        const toX = near.rabbit.root.position.x - this.playerPosition.x;
+        const toZ = near.rabbit.root.position.z - this.playerPosition.z;
+        const facing = near.dist > 0.001
+          ? (forwardX * toX + forwardZ * toZ) / near.dist
+          : 1;
+        if (facing > 0.45 && this.elapsedTotal - this.lastAdamThoughtAt >= 2.2) {
+          this.lastAdamThoughtAt = this.elapsedTotal;
+          this.callbacks.onAdamThought?.('Un conejo del jardín. Salta entre la hierba y huye si me acerco.');
+          return;
+        }
+      }
+    }
+
+    this.tryHarvestFruit(forwardX, forwardZ, -1);
+  }
+
+  /** Recolecta el fruto más cercano si está delante. Devuelve true si recolectó. */
+  private tryHarvestFruit(forwardX: number, forwardZ: number, lilithFacing: number): boolean {
     let closest: THREE.Object3D | null = null;
     let closestDistSq = 25;
+    let closestFacing = -1;
     for (const h of this.harvestables) {
       if (h.userData.harvested) continue;
-      const dx = this.playerPosition.x - h.position.x;
-      const dz = this.playerPosition.z - h.position.z;
-      const distSq = dx * dx + dz * dz;
-      if (distSq < closestDistSq) {
-        closestDistSq = distSq;
-        closest = h;
+      const toX = h.position.x - this.playerPosition.x;
+      const toZ = h.position.z - this.playerPosition.z;
+      const distSq = toX * toX + toZ * toZ;
+      if (distSq >= closestDistSq || distSq < 0.0001) continue;
+      const dist = Math.sqrt(distSq);
+      const facing = (forwardX * toX + forwardZ * toZ) / dist;
+      if (facing < 0.25) continue;
+      closestDistSq = distSq;
+      closest = h;
+      closestFacing = facing;
+    }
+    if (!closest) return false;
+    if (lilithFacing >= 0.55 && closestFacing < lilithFacing + 0.08) return false;
+
+    const fruits: THREE.Object3D[] = [];
+    closest.traverse(child => {
+      if (child.userData.isFruit && child.parent) fruits.push(child);
+    });
+    if (fruits.length === 0) return false;
+    const removed = closest.userData.removedFruits as Array<{ mesh: THREE.Object3D; parent: THREE.Object3D }> || [];
+    for (const f of fruits) {
+      const parent = f.parent;
+      if (parent) {
+        parent.remove(f);
+        removed.push({ mesh: f, parent });
       }
     }
-    if (closest) {
-      const fruits: THREE.Object3D[] = [];
-      closest.traverse(child => {
-        if (child.userData.isFruit && child.parent) fruits.push(child);
-      });
-      if (fruits.length > 0) {
-        const removed = closest.userData.removedFruits as Array<{ mesh: THREE.Object3D; parent: THREE.Object3D }> || [];
-        for (const f of fruits) {
-          const parent = f.parent;
-          if (parent) {
-            parent.remove(f);
-            removed.push({ mesh: f, parent });
-          }
-        }
-        closest.userData.harvested = true;
-        closest.userData.removedFruits = removed;
-        this.food += 1;
-        this.callbacks.onFoodUpdate?.(Math.max(0, Math.ceil(this.food)));
-      }
-    }
+    closest.userData.harvested = true;
+    closest.userData.removedFruits = removed;
+    this.food += 1;
+    this.callbacks.onFoodUpdate?.(Math.max(0, Math.ceil(this.food)));
+    return true;
   }
 
   // Restaurar frutas al reiniciar la partida
