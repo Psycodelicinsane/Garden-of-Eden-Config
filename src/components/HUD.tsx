@@ -17,6 +17,69 @@ interface HUDProps {
   showExploreHint: boolean;
 }
 
+/** Pergamino horizontal con extremos enrollados. */
+function HudParchment({
+  children,
+  onClick,
+  compact,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  compact?: boolean;
+}) {
+  const uid = useId().replace(/:/g, '');
+  const paper = `paper-${uid}`;
+  const roll = `roll-${uid}`;
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`relative isolate ${onClick ? 'cursor-pointer active:scale-95 hover:scale-[1.03] transition-transform' : ''}`}
+      style={{ filter: 'drop-shadow(0 6px 10px rgba(40,20,6,0.55))' }}
+    >
+      <svg
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 260 52"
+        preserveAspectRatio="none"
+        aria-hidden
+      >
+        <defs>
+          <linearGradient id={paper} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fff8e8" />
+            <stop offset="42%" stopColor="#f3e2bc" />
+            <stop offset="100%" stopColor="#d8b57a" />
+          </linearGradient>
+          <linearGradient id={roll} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#6a4420" />
+            <stop offset="22%" stopColor="#c4a06a" />
+            <stop offset="50%" stopColor="#8a5a2c" />
+            <stop offset="78%" stopColor="#e6c88a" />
+            <stop offset="100%" stopColor="#5a3814" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M22 8 C 70 4, 190 4, 238 8 C 242 16, 242 36, 238 44 C 190 48, 70 48, 22 44 C 18 36, 18 16, 22 8 Z"
+          fill={`url(#${paper})`}
+          stroke="#7a5224"
+          strokeWidth="1.4"
+        />
+        <path d="M40 16 C90 18 170 14 220 17" fill="none" stroke="#c4a06a" strokeWidth="0.6" opacity="0.45" />
+        <path d="M38 36 C100 33 175 38 222 34" fill="none" stroke="#c4a06a" strokeWidth="0.55" opacity="0.35" />
+        <rect x="6" y="5" width="16" height="42" rx="7.5" fill={`url(#${roll})`} stroke="#3d2410" strokeWidth="1.2" />
+        <rect x="238" y="5" width="16" height="42" rx="7.5" fill={`url(#${roll})`} stroke="#3d2410" strokeWidth="1.2" />
+        <ellipse cx="14" cy="8" rx="6.2" ry="3.2" fill="#ead4a4" opacity="0.85" />
+        <ellipse cx="246" cy="8" rx="6.2" ry="3.2" fill="#ead4a4" opacity="0.85" />
+        <ellipse cx="14" cy="44" rx="6.2" ry="3.4" fill="#4a2e12" />
+        <ellipse cx="246" cy="44" rx="6.2" ry="3.4" fill="#4a2e12" />
+      </svg>
+      <div className={`relative z-10 flex items-center justify-center gap-2.5 py-1.5 ${compact ? 'px-7 min-h-[34px] min-w-[108px]' : 'px-8 min-h-[36px] min-w-[168px]'}`}>
+        {children}
+      </div>
+    </Tag>
+  );
+}
+
 const COMPASS_POINTS = [
   { label: 'N', deg: 0, major: true },
   { label: 'NE', deg: 45, major: false },
