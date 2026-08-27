@@ -12,6 +12,11 @@ import { classifyDecorTree } from './forestKind';
 import { finishInstances, makeInstanced, setInstance } from './instancedProps';
 import { GRASS_TUFT_BUDGET, ROCK_BUDGET } from './perfBudget';
 import {
+  createWaterfallSystem,
+  updateWaterfallSystem,
+  WaterfallSystem,
+} from './waterfall';
+import {
   BERRY_BUSH_COUNT,
   EDEN_LANDMARKS,
   FOREST_TREE_COUNT,
@@ -445,7 +450,7 @@ export class GameEngine {
   private elapsedTotal = 0;
   private terrainMesh: THREE.Mesh | null = null;
   private riverMeshes: THREE.Mesh[] = [];
-  private waterfallSheets: THREE.Mesh[] = [];
+  private waterfallSystem: WaterfallSystem | null = null;
   private underwater = false;
 
   // Registros
@@ -569,6 +574,7 @@ export class GameEngine {
       this.updateButterflies(t);
       this.rabbits?.update(1 / 60, t, this.camera.position.x, this.camera.position.z);
       this.updateRiver(t);
+      this.updateWaterfall(1 / 60, t);
       this.updateClouds(t);
       this.updateSky();
       this.renderer.render(this.scene, this.camera);
@@ -583,6 +589,7 @@ export class GameEngine {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
+    this.waterfallSystem?.audio?.init();
     this.paused = false;
     this.forbiddenCinematicActive = false;
     this.state = 'cinematic';
@@ -742,6 +749,7 @@ export class GameEngine {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
+    this.waterfallSystem?.audio?.dispose();
     this.removeEventListeners();
     if (document.pointerLockElement === this.canvas) document.exitPointerLock?.();
 
@@ -807,18 +815,27 @@ export class GameEngine {
   // Terreno base SIN modificar por el río
   private getBaseTerrainHeight(x: number, z: number) {
     const d = Math.sqrt(x * x + z * z);
-    const flat = this.sstep(24, 70, d);
+    const flat = this.sstep(24, 85, d);
     let h = (
       Math.sin(x * 0.045) * Math.cos(z * 0.05) * 1.5 +
       Math.sin(x * 0.013 + z * 0.017) * 2.2 +
       Math.cos(x * 0.09) * Math.sin(z * 0.075) * 0.45
     ) * flat;
-    h += this.sstep(150, 235, d) * 7;
+    h += this.sstep(160, 240, d) * 6;
     const far = this.sstep(260, 900, d);
     const nearRiver = riverDistance(x, z);
     const keepFlat = this.sstep(170, 40, nearRiver);
-    h += far * (26 + Math.sin(x * 0.006) * Math.cos(z * 0.005) * 14 + Math.sin(d * 0.012) * 9) * (1 - keepFlat);
+    h += far * (22 + Math.sin(x * 0.006) * Math.cos(z * 0.005) * 12 + Math.sin(d * 0.012) * 8) * (1 - keepFlat);
     h *= 1 - keepFlat;
+
+    // Meseta alta detrás de la cascada a la altura del nacedero (Y = 68)
+    if (x > 630) {
+      const pX = this.sstep(630, 665, x);
+      const pZ = this.sstep(200, 130, Math.abs(z - 140));
+      const plateauWeight = pX * pZ;
+      h = h * (1 - plateauWeight) + (68 + Math.sin(x * 0.02) * Math.cos(z * 0.02) * 1.5) * plateauWeight;
+    }
+
     if (nearRiver > 140 || x > WATERFALL.x + 12) h += mountainHeight(x, z);
     return h;
   }
@@ -842,6 +859,7 @@ export class GameEngine {
     this.createLights();
     this.createSkyAndSun();
     this.createTerrain();
+    this.createMountains();
     this.createRiver();
     this.createWaterfall();
     this.createAppleTree();
@@ -974,9 +992,10 @@ export class GameEngine {
   getTerrainHeight(x: number, z: number) {
     let h = this.getBaseTerrainHeight(x, z);
 
+    // No tallar el lecho del río dentro del risco de la cascada (X > 612)
     const hit = nearestRiver(x, z);
     const bankReach = hit.halfWidth + 22;
-    if (hit.dist < bankReach) {
+    if (hit.dist < bankReach && x < 612) {
       const waterY = this.riverSurface(hit.x, hit.z);
       const bankH = waterY + 0.9;
       const valley = this.sstep(bankReach, hit.halfWidth + 2.5, hit.dist);
@@ -1009,6 +1028,34 @@ export class GameEngine {
     this.scene.add(this.terrainMesh);
   }
 
+  private createMountains() {
+    const mountainGroup = new THREE.Group();
+    const rockMat = new THREE.MeshLambertMaterial({ color: 0x6e533c, flatShading: true });
+    const darkRockMat = new THREE.MeshLambertMaterial({ color: 0x4a3625, flatShading: true });
+    const greenPeakMat = new THREE.MeshLambertMaterial({ color: 0x3d6628, flatShading: true });
+
+    // Crestas y cumbres lejanas de horizonte (muy detrás de la meseta plana en X >= 860)
+    const distantPeaks: Array<{ x: number; z: number; height: number; radius: number }> = [
+      { x: 890, z: 140, height: 42, radius: 55 },
+      { x: 880, z: 240, height: 48, radius: 60 },
+      { x: 880, z: 40, height: 44, radius: 50 },
+    ];
+
+    for (let i = 0; i < distantPeaks.length; i++) {
+      const p = distantPeaks[i];
+      const py = this.getTerrainHeight(p.x, p.z);
+      const coneGeo = new THREE.ConeGeometry(p.radius * 0.7, p.height, 6);
+      const mat = i % 2 === 0 ? rockMat : (i % 3 === 0 ? greenPeakMat : darkRockMat);
+      const peakMesh = new THREE.Mesh(coneGeo, mat);
+      peakMesh.position.set(p.x, py + p.height * 0.40, p.z);
+      peakMesh.rotation.set(0.04, i * 0.8, 0.03);
+      peakMesh.castShadow = true;
+      peakMesh.receiveShadow = true;
+      mountainGroup.add(peakMesh);
+    }
+
+    this.scene.add(mountainGroup);
+  }
 
   private createRiver() {
     this.riverMeshes = [];
@@ -1075,85 +1122,11 @@ export class GameEngine {
 
 
   private createWaterfall() {
-    const poolX = WATERFALL.x;
-    const poolZ = WATERFALL.z;
-    const lipX = WATERFALL.lipX;
-    const waterY = this.riverSurface();
-    const drop = WATERFALL.height;
-    const topY = waterY + drop;
-    const group = new THREE.Group();
-    group.position.set(poolX, 0, poolZ);
-
-    const rockMat = new THREE.MeshLambertMaterial({ color: 0x7a756c, flatShading: true });
-    const darkRock = new THREE.MeshLambertMaterial({ color: 0x4a4540, flatShading: true });
-    const mossMat = new THREE.MeshLambertMaterial({ color: 0x3d6828, flatShading: true });
-
-    const addRock = (px: number, py: number, pz: number, sx: number, sy: number, sz: number, mat: THREE.Material) => {
-      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), mat);
-      rock.position.set(px, py, pz);
-      rock.scale.set(sx, sy, sz);
-      rock.rotation.set(px * 0.03, py * 0.05, pz * 0.04);
-      rock.castShadow = true;
-      group.add(rock);
-    };
-
-    const faceX = lipX - poolX;
-    for (let i = -10; i <= 10; i++) {
-      addRock(faceX + 8, topY * 0.48, i * 5.4, 9, drop * 0.62, 6.2, i % 2 ? rockMat : darkRock);
-      addRock(faceX + 2, topY - 10, i * 4.2, 4.4, 22, 3.6, i % 3 ? darkRock : rockMat);
-      addRock(faceX - 1, topY + 1.2, i * 3.6, 3.2, 2.4, 2.6, mossMat);
-      addRock(10, waterY + 2.2, i * 3.4, 2.2, 4.2, 2.0, i % 3 === 0 ? mossMat : rockMat);
+    this.waterfallSystem = createWaterfallSystem(this.waterTex!);
+    this.scene.add(this.waterfallSystem.group);
+    for (const body of this.waterfallSystem.collisionBodies) {
+      this.collisionBodies.push(body);
     }
-    for (let k = 0; k < 8; k++) {
-      addRock(faceX + 28 + k * 14, topY - 4 + (k % 3) * 6, (k - 3.5) * 12, 16, 18, 14, k % 2 ? darkRock : rockMat);
-    }
-
-    const pool = new THREE.Mesh(
-      new THREE.CircleGeometry(28, 24),
-      new THREE.MeshLambertMaterial({ color: 0x3d96d4, map: this.waterTex!, side: THREE.DoubleSide }),
-    );
-    pool.rotation.x = -Math.PI / 2;
-    pool.position.set(-2, waterY + 0.06, 0);
-    group.add(pool);
-
-    const mkSheet = (w: number, h: number, px: number, py: number, pz: number, lean: number, opacity: number, rep: number) => {
-      const tex = this.waterTex!.clone();
-      tex.needsUpdate = true;
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.RepeatWrapping;
-      tex.repeat.set(1.2, rep);
-      const mat = new THREE.MeshBasicMaterial({
-        map: tex,
-        color: 0xc8eefe,
-        transparent: true,
-        opacity,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
-      const sheet = new THREE.Mesh(new THREE.PlaneGeometry(w, h, 1, 14), mat);
-      sheet.position.set(px, py, pz);
-      sheet.rotation.order = 'YXZ';
-      sheet.rotation.y = Math.PI / 2;
-      sheet.rotation.x = lean;
-      group.add(sheet);
-      this.waterfallSheets.push(sheet);
-    };
-
-    const midX = (lipX - poolX) * 0.42;
-    mkSheet(WATERFALL.width, drop + 3, midX, waterY + drop * 0.52, 0, 0.08, 0.88, 4.2);
-    mkSheet(WATERFALL.width * 0.7, drop * 0.95, midX + 1.4, waterY + drop * 0.5, -3.8, 0.12, 0.55, 3.4);
-    mkSheet(WATERFALL.width * 0.55, drop * 0.82, midX + 0.6, waterY + drop * 0.44, 4.2, 0.1, 0.48, 3.0);
-
-    const foam = new THREE.Mesh(
-      new THREE.CircleGeometry(9, 16),
-      new THREE.MeshBasicMaterial({ color: 0xf4fbff, transparent: true, opacity: 0.5, depthWrite: false }),
-    );
-    foam.rotation.x = -Math.PI / 2;
-    foam.position.set(3, waterY + 0.28, 0);
-    group.add(foam);
-
-    this.collisionBodies.push({ x: lipX - 2, z: poolZ, radius: 16 });
-    this.scene.add(group);
   }
 
   private createAppleTree() {
@@ -1163,20 +1136,22 @@ export class GameEngine {
     const barkMat = new THREE.MeshLambertMaterial({ map: this.barkTex!, flatShading: true });
     const leafMat = new THREE.MeshLambertMaterial({ map: this.leafTex!, flatShading: true });
 
-    // Tronco principal grueso
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.95, 5.2, 7), barkMat);
-    trunk.position.y = 2.6;
+    // Tronco principal imponente y grueso
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.45, 8.2, 8), barkMat);
+    trunk.position.y = 4.1;
     trunk.castShadow = true;
     g.add(trunk);
 
-    // Copa — masas de follaje facetadas (icosaedros PS2)
+    // Copa monumental — masas de follaje amplias (icosaedros PS2)
     const blobs: Array<[number, number, number, number]> = [
-      [0, 6.6, 0, 3.0],
-      [2.2, 5.7, 0.7, 2.2],
-      [-2.1, 5.9, -0.5, 2.3],
-      [0.5, 5.5, 2.2, 2.0],
-      [-0.8, 5.6, -2.2, 2.1],
-      [1.1, 7.7, -0.9, 1.9],
+      [0, 9.8, 0, 4.8],
+      [3.2, 8.6, 1.2, 3.6],
+      [-3.0, 8.8, -0.8, 3.7],
+      [0.8, 8.4, 3.4, 3.4],
+      [-1.2, 8.6, -3.4, 3.5],
+      [1.6, 11.8, -1.4, 3.1],
+      [-1.4, 11.6, 1.6, 2.9],
+      [0, 13.5, 0, 2.7],
     ];
     for (const [bx, by, bz, br] of blobs) {
       const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(br, 0), leafMat);
@@ -1186,31 +1161,25 @@ export class GameEngine {
       g.add(blob);
     }
 
-    // Manzanas brillantes — colgadas del follaje, nunca flotando
+    // Manzanas brillantes grandes — colgadas del follaje
     const appleMat = new THREE.MeshLambertMaterial({
       color: 0xe02412,
       emissive: 0x881100,
       emissiveIntensity: 0.6,
     });
-    // Se cuelgan sobre la piel de cada masa de follaje: nunca flotan sueltas
-    // ni quedan sepultadas dentro de las hojas.
     const stemMat = new THREE.MeshLambertMaterial({ color: 0x3d2a12 });
     let appleIdx = 0;
     for (const [bx, by, bz, br] of blobs) {
-      // 3 manzanas por masa, repartidas alrededor y ligeramente hacia abajo
       for (let k = 0; k < 3; k++) {
         const ang = (k / 3) * Math.PI * 2 + (bx + bz) * 0.9;
-        // Inclinación hacia abajo: las manzanas cuelgan de la parte baja de la copa
         const el = -0.15 - this.rand() * 0.5;
         const cosEl = Math.cos(el);
-        // El icosaedro de detalle 0 tiene sus caras a ~0.79·r del centro:
-        // 0.80 deja la manzana justo apoyada sobre la hoja.
         const rr = br * 0.80;
         const ax = bx + Math.cos(ang) * cosEl * rr;
         const ay = by + Math.sin(el) * rr;
         const az = bz + Math.sin(ang) * cosEl * rr;
 
-        const apple = new THREE.Mesh(new THREE.SphereGeometry(0.24, 7, 6), appleMat);
+        const apple = new THREE.Mesh(new THREE.SphereGeometry(0.35, 7, 6), appleMat);
         apple.position.set(ax, ay, az);
         apple.scale.set(1, 0.92, 1);
         apple.castShadow = true;
@@ -1219,17 +1188,15 @@ export class GameEngine {
         g.add(apple);
         this.apples.push(apple);
 
-        // Rabito que la une al follaje
-        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.13, 4), stemMat);
-        stem.position.set(ax, ay + 0.17, az);
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.030, 0.18, 4), stemMat);
+        stem.position.set(ax, ay + 0.22, az);
         g.add(stem);
 
         appleIdx++;
       }
     }
 
-    // El tronco del árbol prohibido es un cuerpo sólido
-    this.collisionBodies.push({ x: 0, z: 0, radius: 1.05 });
+    this.collisionBodies.push({ x: 0, z: 0, radius: 1.65 });
 
     this.appleTree = g;
     this.scene.add(g);
@@ -1245,35 +1212,136 @@ export class GameEngine {
 
   private createForest(count: number) {
     const barkMat = new THREE.MeshLambertMaterial({ map: this.barkTex!, flatShading: true });
-    const leafMat = new THREE.MeshLambertMaterial({ map: this.leafTex!, flatShading: true });
     const fruitLeafMat = new THREE.MeshLambertMaterial({ map: this.leafTex!, color: 0x9fd46a, flatShading: true });
     const fruitMat = new THREE.MeshLambertMaterial({ color: 0xff8c2a, emissive: 0x552200, emissiveIntensity: 0.45 });
 
+    // Modelos unificados con colores de vértice (PS2 ultra-optimizado)
+    const treeMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+
+    const mergeSubGeos = (parts: Array<{ geo: THREE.BufferGeometry; color: number; ox?: number; oy?: number; oz?: number; sx?: number; sy?: number; sz?: number }>) => {
+      const geo = new THREE.BufferGeometry();
+      const verts: number[] = [];
+      const norms: number[] = [];
+      const colors: number[] = [];
+      const indices: number[] = [];
+
+      for (const p of parts) {
+        const pos = p.geo.attributes.position as THREE.BufferAttribute;
+        const norm = p.geo.attributes.normal as THREE.BufferAttribute | undefined;
+        const c = new THREE.Color(p.color);
+        const startIdx = verts.length / 3;
+
+        for (let i = 0; i < pos.count; i++) {
+          const vx = pos.getX(i) * (p.sx ?? 1);
+          const vy = pos.getY(i) * (p.sy ?? 1);
+          const vz = pos.getZ(i) * (p.sz ?? 1);
+          verts.push(vx + (p.ox ?? 0), vy + (p.oy ?? 0), vz + (p.oz ?? 0));
+          if (norm) norms.push(norm.getX(i), norm.getY(i), norm.getZ(i));
+          else norms.push(0, 1, 0);
+          colors.push(c.r, c.g, c.b);
+        }
+        const idx = p.geo.index;
+        if (idx) {
+          for (let i = 0; i < idx.count; i++) indices.push(startIdx + idx.getX(i));
+        } else {
+          for (let i = 0; i < pos.count; i++) indices.push(startIdx + i);
+        }
+      }
+
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    };
+
+    // 1. Modelo unificado de Pino / Conífera
+    const pineModel = mergeSubGeos([
+      { geo: new THREE.CylinderGeometry(0.32, 0.55, 3.8, 6), color: 0x4a3020, oy: 1.9 },
+      { geo: new THREE.ConeGeometry(2.4, 3.4, 6), color: 0x143c12, oy: 3.8 },
+      { geo: new THREE.ConeGeometry(2.0, 3.0, 6), color: 0x184416, oy: 5.8 },
+      { geo: new THREE.ConeGeometry(1.6, 2.6, 6), color: 0x1c4e1a, oy: 7.7 },
+      { geo: new THREE.ConeGeometry(1.1, 2.2, 6), color: 0x225c20, oy: 9.4 },
+    ]);
+
+    // 2. Modelo unificado de Árbol Noble / Roble Esmeralda
+    const roundModel = mergeSubGeos([
+      { geo: new THREE.CylinderGeometry(0.42, 0.68, 4.2, 6), color: 0x4a3020, oy: 2.1 },
+      { geo: new THREE.IcosahedronGeometry(2.3, 0), color: 0x2a7418, oy: 5.6, sx: 1.2, sy: 0.9, sz: 1.2 },
+      { geo: new THREE.IcosahedronGeometry(1.8, 0), color: 0x32861e, oy: 6.9, ox: 0.8, oz: -0.5 },
+      { geo: new THREE.IcosahedronGeometry(1.8, 0), color: 0x246814, oy: 6.6, ox: -0.8, oz: 0.6 },
+      { geo: new THREE.IcosahedronGeometry(1.5, 0), color: 0x399422, oy: 8.3, ox: 0.2, oz: 0.3 },
+    ]);
+
+    // 3. Modelo unificado de Árbol Dorado
+    const goldenModel = mergeSubGeos([
+      { geo: new THREE.CylinderGeometry(0.38, 0.62, 4.0, 6), color: 0x4a3020, oy: 2.0 },
+      { geo: new THREE.IcosahedronGeometry(2.2, 0), color: 0xe5a32b, oy: 5.5, sx: 1.2, sy: 0.9, sz: 1.2 },
+      { geo: new THREE.IcosahedronGeometry(1.8, 0), color: 0xf3b838, oy: 6.8, ox: 0.8, oz: -0.5 },
+      { geo: new THREE.IcosahedronGeometry(1.8, 0), color: 0xd4921e, oy: 6.5, ox: -0.8, oz: 0.6 },
+      { geo: new THREE.IcosahedronGeometry(1.5, 0), color: 0xfcc74c, oy: 8.2, ox: 0.2, oz: 0.3 },
+    ]);
+
+    // 4. Modelo unificado de Palmera
+    const palmModel = mergeSubGeos([
+      { geo: new THREE.CylinderGeometry(0.28, 0.52, 6.5, 6), color: 0x5c4328, oy: 3.25 },
+      { geo: new THREE.IcosahedronGeometry(0.7, 0), color: 0x246814, oy: 6.6 },
+      ...[0, 1, 2, 3, 4, 5].map(b => ({
+        geo: new THREE.ConeGeometry(0.48, 3.6, 4),
+        color: 0x368e20,
+        ox: Math.cos(b * Math.PI / 3) * 1.5,
+        oy: 6.2,
+        oz: Math.sin(b * Math.PI / 3) * 1.5,
+        sy: 0.8,
+      }))
+    ]);
+
     type Inst = { x: number; y: number; z: number; sx: number; sy: number; sz: number; rx: number; ry: number; rz: number };
-    const mk = (x: number, y: number, z: number, sx: number, sy: number, sz: number, rx = 0, ry = 0, rz = 0): Inst =>
-      ({ x, y, z, sx, sy, sz, rx, ry, rz });
-    const trunks: Inst[] = [];
-    const crowns: Inst[] = [];
-    const cones: Inst[] = [];
-    const palmLeaves: Inst[] = [];
-    const palmCaps: Inst[] = [];
+    const mk = (x: number, y: number, z: number, s: number, ry: number): Inst =>
+      ({ x, y, z, sx: s, sy: s, sz: s, rx: 0, ry, rz: 0 });
+
+    const pineTrees: Inst[] = [];
+    const roundTrees: Inst[] = [];
+    const goldenTrees: Inst[] = [];
+    const palmTrees: Inst[] = [];
 
     let placed = 0;
     let guard = 0;
-    while (placed < count && guard < count * 30) {
+    while (placed < count && guard < count * 50) {
       guard++;
       const isFruitTree = isFruitTreeIndex(placed);
-      const x = this.rand() * 1800 - 900;
-      const z = this.rand() * 1800 - 900;
-      const d = Math.sqrt(x * x + z * z);
+      
+      let x = 0;
+      let z = 0;
+      if (placed < 140) {
+        // Fuera del gran círculo sagrado de 100m del árbol
+        const rad = 100 + this.rand() * 45;
+        const ang = this.rand() * Math.PI * 2;
+        x = Math.cos(ang) * rad;
+        z = Math.sin(ang) * rad;
+      } else if (placed < 320) {
+        // Cinturón medio de bosques
+        const rad = 145 + this.rand() * 150;
+        const ang = this.rand() * Math.PI * 2;
+        x = Math.cos(ang) * rad;
+        z = Math.sin(ang) * rad;
+      } else {
+        // Bosque exterior hacia el horizonte
+        const rad = 290 + this.rand() * 540;
+        const ang = this.rand() * Math.PI * 2;
+        x = Math.cos(ang) * rad;
+        z = Math.sin(ang) * rad;
+      }
 
-      if (isMeadow(x, z) && !isFruitTree) continue;
-      if (d < (isFruitTree ? 42 : 200)) continue;
-      if (riverDistance(x, z) < 32 || isWaterfallZone(x, z)) continue;
+      const d = Math.sqrt(x * x + z * z);
+      if (isMeadow(x, z) || d < 100) continue; // Círculo sagrado amplio de 100m 100% libre de árboles
+      if (riverDistance(x, z) < 45 || isWaterfallZone(x, z)) continue; // Totalmente fuera del agua y ribera
       if (isMountainCore(x, z)) continue;
 
       const y = this.getTerrainHeight(x, z);
-      const s = 0.75 + this.rand() * 0.85;
+      const s = 0.8 + this.rand() * 0.85;
+      const rotY = this.rand() * Math.PI * 2;
 
       if (isFruitTree) {
         const tree = new THREE.Group();
@@ -1314,38 +1382,75 @@ export class GameEngine {
         this.scene.add(tree);
       } else {
         const kind = classifyDecorTree(x, z, this.rand(), this.rand());
-        if (kind === 'palm') {
-          const trunkH = (4.2 + this.rand() * 1.8) * s;
-          trunks.push(mk(x, y + trunkH / 2, z, 0.7 * s, trunkH, 0.7 * s, 0, this.rand() * 3, 0));
-          for (let b = 0; b < 5; b++) {
-            palmLeaves.push(mk(x, y + trunkH, z, 0.18 * s, 1.6 * s, 0.18 * s, 0, (b / 5) * Math.PI * 2, 0.95));
-          }
-          palmCaps.push(mk(x, y + trunkH + 0.15 * s, z, 0.55 * s, 0.55 * s, 0.55 * s));
-        } else if (kind === 'round') {
-          const nBlobs = 2 + Math.floor(this.rand() * 2);
-          const trunkH = (2.4 + this.rand() * 1.1) * s;
-          trunks.push(mk(x, y + trunkH / 2, z, s, trunkH, s, 0, this.rand() * 3, 0));
-          for (let b = 0; b < nBlobs; b++) {
-            const br = (1.0 + this.rand() * 0.8) * s;
-            crowns.push(mk(
-              x + (this.rand() - 0.5) * 1.6 * s,
-              y + trunkH + (0.3 + this.rand() * 0.9) * s,
-              z + (this.rand() - 0.5) * 1.6 * s,
-              br, br, br,
-              this.rand() * 3, this.rand() * 3, this.rand() * 3,
-            ));
-          }
-        } else {
-          const trunkH = 1.5 * s;
-          trunks.push(mk(x, y + trunkH / 2, z, 0.85 * s, trunkH, 0.85 * s));
-          for (let ti = 0; ti < 3; ti++) {
-            const cr = (1.45 - ti * 0.38) * s;
-            cones.push(mk(x, y + trunkH + (0.6 + ti * 0.85) * s, z, cr, 1.5 * s, cr, 0, this.rand() * 3, 0));
-          }
-        }
+        if (kind === 'palm') palmTrees.push(mk(x, y, z, s, rotY));
+        else if (kind === 'golden') goldenTrees.push(mk(x, y, z, s, rotY));
+        else if (kind === 'round') roundTrees.push(mk(x, y, z, s, rotY));
+        else pineTrees.push(mk(x, y, z, s, rotY));
+
         this.collisionBodies.push({ x, z, radius: 0.5 * s });
       }
       placed++;
+    }
+
+    // ── 1. GRAN PINAR DEL SUROESTE (SUPERPOBLADO DE CONÍFERAS) ──
+    for (let i = 0; i < 480; i++) {
+      const px = -100 - this.rand() * 360;
+      const pz = -100 - this.rand() * 360;
+      if (riverDistance(px, pz) < 45) continue; // Nunca en el río
+      const py = this.getTerrainHeight(px, pz);
+      const bs = 0.85 + this.rand() * 0.95;
+      pineTrees.push(mk(px, py, pz, bs, this.rand() * Math.PI * 2));
+    }
+
+    // ── 2. PALMERAL Y BOSQUE TROPICAL DEL SURESTE (PALMERAS Y ÁRBOLES DORADOS) ──
+    for (let i = 0; i < 480; i++) {
+      const px = 100 + this.rand() * 360;
+      const pz = -100 - this.rand() * 360;
+      if (riverDistance(px, pz) < 45) continue; // Nunca en el río
+      const py = this.getTerrainHeight(px, pz);
+      const bs = 0.85 + this.rand() * 0.95;
+      const rotY = this.rand() * Math.PI * 2;
+      if (i % 2 === 0) palmTrees.push(mk(px, py, pz, bs, rotY));
+      else goldenTrees.push(mk(px, py, pz, bs, rotY));
+    }
+
+    // ── 3. GRAN BOSQUE VERDE ESMERALDA DEL OESTE ──
+    for (let i = 0; i < 420; i++) {
+      const px = -100 - this.rand() * 360;
+      const pz = -100 + this.rand() * 200;
+      if (riverDistance(px, pz) < 45) continue; // Nunca en el río
+      const py = this.getTerrainHeight(px, pz);
+      const bs = 0.85 + this.rand() * 0.95;
+      roundTrees.push(mk(px, py, pz, bs, this.rand() * Math.PI * 2));
+    }
+
+    // ── 4. BOSQUES DE LAS COLINAS DEL NORTE (TRAS EL RÍO) ──
+    for (let i = 0; i < 550; i++) {
+      const px = (this.rand() - 0.5) * 950;
+      const pz = 155 + this.rand() * 330;
+      if (riverDistance(px, pz) < 45 || isWaterfallZone(px, pz)) continue; // Fuera del río y nacedero
+      const py = this.getTerrainHeight(px, pz);
+      const bs = 0.85 + this.rand() * 0.95;
+      roundTrees.push(mk(px, py, pz, bs, this.rand() * Math.PI * 2));
+    }
+
+    // ── 5. MANTO PERIMETRAL CONTINUO EN 360° ──
+    for (let bg = 0; bg < 450; bg++) {
+      const ang = (bg / 450) * Math.PI * 2 + (this.rand() - 0.5) * 0.08;
+      const rad = 190 + (bg % 6) * 45 + this.rand() * 40;
+      const bx = Math.cos(ang) * rad;
+      const bz = Math.sin(ang) * rad;
+
+      if (riverDistance(bx, bz) < 45 || isWaterfallZone(bx, bz)) continue;
+      const by = this.getTerrainHeight(bx, bz);
+      const bs = 0.9 + this.rand() * 0.9;
+      const rotY = this.rand() * Math.PI * 2;
+      const kind = classifyDecorTree(bx, bz, this.rand(), this.rand());
+
+      if (kind === 'palm') palmTrees.push(mk(bx, by, bz, bs, rotY));
+      else if (kind === 'golden') goldenTrees.push(mk(bx, by, bz, bs, rotY));
+      else if (kind === 'round') roundTrees.push(mk(bx, by, bz, bs, rotY));
+      else pineTrees.push(mk(bx, by, bz, bs, rotY));
     }
 
     const addBatch = (geo: THREE.BufferGeometry, mat: THREE.Material, items: Inst[]) => {
@@ -1362,11 +1467,11 @@ export class GameEngine {
       this.scene.add(mesh);
     };
 
-    addBatch(new THREE.CylinderGeometry(0.18, 0.32, 1, 6), barkMat, trunks);
-    addBatch(new THREE.IcosahedronGeometry(1, 0), leafMat, crowns);
-    addBatch(new THREE.ConeGeometry(1, 1, 6), leafMat, cones);
-    addBatch(new THREE.ConeGeometry(1, 1, 4), leafMat, palmLeaves);
-    addBatch(new THREE.IcosahedronGeometry(1, 0), leafMat, palmCaps);
+    // Solo 4 InstancedMesh para miles de árboles unidos
+    addBatch(pineModel, treeMat, pineTrees);
+    addBatch(roundModel, treeMat, roundTrees);
+    addBatch(goldenModel, treeMat, goldenTrees);
+    addBatch(palmModel, treeMat, palmTrees);
   }
 
   private createFlora() {
@@ -1385,70 +1490,81 @@ export class GameEngine {
     finishInstances(grass, grassUsed);
     this.scene.add(grass);
 
-    // Corona de flores del claro, como el anillo de la carta.
+    // Corona de flores del claro, como el anillo de la carta (alrededor del gran círculo sagrado de 100m).
     const ringPetals = ['#ff88aa', '#ffee66', '#ffffff', '#ff9944', '#cc88ff'];
-    for (let i = 0; i < 86; i++) {
-      const ang = (i / 86) * Math.PI * 2 + this.rand() * 0.08;
-      const rad = 20 + this.rand() * 9;
+    for (let i = 0; i < 180; i++) {
+      const ang = (i / 180) * Math.PI * 2 + this.rand() * 0.08;
+      const rad = 82 + this.rand() * 14;
       const x = Math.cos(ang) * rad;
       const z = Math.sin(ang) * rad;
-      if (riverDistance(x, z) < 16) continue;
+      if (riverDistance(x, z) < 20) continue;
       const y = this.getTerrainHeight(x, z);
       const f = new THREE.Group();
       const stem = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.012, 0.016, 0.3, 4),
+        new THREE.CylinderGeometry(0.014, 0.018, 0.35, 4),
         new THREE.MeshLambertMaterial({ color: 0x2d6a18 })
       );
-      stem.position.y = 0.15;
+      stem.position.y = 0.17;
       f.add(stem);
       const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.055, 5, 4),
+        new THREE.SphereGeometry(0.075, 5, 4),
         new THREE.MeshLambertMaterial({ color: ringPetals[Math.floor(this.rand() * ringPetals.length)] })
       );
-      head.position.y = 0.32;
+      head.position.y = 0.38;
       head.scale.set(1, 0.6, 1);
       f.add(head);
       f.position.set(x, y, z);
       this.scene.add(f);
     }
 
-    // Flores silvestres
-    const petals = ['#ff88aa', '#ffee66', '#ffffff', '#ff9944', '#cc88ff'];
-    for (let i = 0; i < 70; i++) {
-      const x = this.rand() * 360 - 180;
-      const z = this.rand() * 360 - 180;
-      if (riverDistance(x, z) < 18) continue;
+    // Manto de florecillas esparcidas por todo el círculo sagrado de 100m
+    const meadowPetals = ['#ffee55', '#ffffff', '#ff7799', '#77ccee', '#ccaaff', '#ff9944'];
+    for (let i = 0; i < 320; i++) {
+      const ang = this.rand() * Math.PI * 2;
+      const rad = 10 + this.rand() * 85;
+      const x = Math.cos(ang) * rad;
+      const z = Math.sin(ang) * rad;
+      if (riverDistance(x, z) < 20) continue;
       const y = this.getTerrainHeight(x, z);
       const f = new THREE.Group();
       const stem = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.012, 0.016, 0.3, 4),
+        new THREE.CylinderGeometry(0.012, 0.016, 0.30, 4),
         new THREE.MeshLambertMaterial({ color: 0x2d6a18 })
       );
       stem.position.y = 0.15;
       f.add(stem);
       const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.055, 5, 4),
-        new THREE.MeshLambertMaterial({ color: petals[Math.floor(this.rand() * petals.length)] })
+        new THREE.SphereGeometry(0.065, 5, 4),
+        new THREE.MeshLambertMaterial({ color: meadowPetals[Math.floor(this.rand() * meadowPetals.length)] })
       );
-      head.position.y = 0.32;
+      head.position.y = 0.33;
       head.scale.set(1, 0.6, 1);
       f.add(head);
       f.position.set(x, y, z);
       this.scene.add(f);
     }
 
-    // ── ARBUSTOS DE BAYAS ── recolectables, con los frutos sobre el follaje
+    // ── ARBUSTOS DE BAYAS ── recolectables, con los frutos sobre el follaje (fuera del círculo R >= 100)
     const bushLeafMat = new THREE.MeshLambertMaterial({ map: this.leafTex!, color: 0x7ab648, flatShading: true });
     const berryColors = [0x8e2f5e, 0xc0304a, 0x4b3fa8, 0xd2542c];
     let bushesPlaced = 0;
     let bushGuard = 0;
     while (bushesPlaced < BERRY_BUSH_COUNT && bushGuard < BERRY_BUSH_COUNT * 40) {
       bushGuard++;
-      const x = this.rand() * 800 - 400;
-      const z = this.rand() * 800 - 400;
+      let x = 0;
+      let z = 0;
+      if (bushesPlaced < 50) {
+        const rad = 100 + this.rand() * 60;
+        const ang = this.rand() * Math.PI * 2;
+        x = Math.cos(ang) * rad;
+        z = Math.sin(ang) * rad;
+      } else {
+        x = this.rand() * 800 - 400;
+        z = this.rand() * 800 - 400;
+      }
       const d = Math.sqrt(x * x + z * z);
-      if (d < 12) continue;
-      if (riverDistance(x, z) < 18) continue;
+      if (d < 100) continue;
+      if (riverDistance(x, z) < 40) continue; // Nunca en el río
       if (isMountainCore(x, z) || isWaterfallZone(x, z)) continue;
       const y = this.getTerrainHeight(x, z);
 
@@ -1514,6 +1630,42 @@ export class GameEngine {
     }
     finishInstances(rocks, rockUsed);
     this.scene.add(rocks);
+
+    // ── NENÚFARES Y FLORES ACUÁTICAS EN EL RÍO ──
+    const lilyPadMat = new THREE.MeshLambertMaterial({ color: 0x1f5e27, side: THREE.DoubleSide });
+    const lilyFlowerMat = new THREE.MeshLambertMaterial({ color: 0xfff0f5 });
+    for (let l = 0; l < 24; l++) {
+      const lx = (l - 12) * 28 + (this.rand() - 0.5) * 12;
+      const lz = 110 + (this.rand() - 0.5) * 14;
+      const padGroup = new THREE.Group();
+      padGroup.position.set(lx, RIVER_SURFACE_Y + 0.04, lz);
+      const pad = new THREE.Mesh(new THREE.CircleGeometry(0.75 + this.rand() * 0.45, 8), lilyPadMat);
+      pad.rotation.x = -Math.PI / 2;
+      padGroup.add(pad);
+      if (l % 2 === 0) {
+        const fl = new THREE.Mesh(new THREE.SphereGeometry(0.12, 5, 4), lilyFlowerMat);
+        fl.position.y = 0.08;
+        padGroup.add(fl);
+      }
+      this.scene.add(padGroup);
+    }
+
+    // ── TRONCOS CAÍDOS Y MADERA MUSGOSA EN EL BOSQUE ──
+    const logBarkMat = new THREE.MeshLambertMaterial({ map: this.barkTex!, flatShading: true });
+    for (let logI = 0; logI < 14; logI++) {
+      const ang = this.rand() * Math.PI * 2;
+      const dist = 48 + this.rand() * 160;
+      const logX = Math.cos(ang) * dist;
+      const logZ = Math.sin(ang) * dist;
+      if (riverDistance(logX, logZ) < 22) continue;
+      const logY = this.getTerrainHeight(logX, logZ);
+      const fallenLog = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 4.2 + this.rand() * 2.5, 6), logBarkMat);
+      fallenLog.position.set(logX, logY + 0.35, logZ);
+      fallenLog.rotation.set(Math.PI / 2 + 0.1, 0, this.rand() * Math.PI);
+      fallenLog.castShadow = true;
+      this.scene.add(fallenLog);
+      this.collisionBodies.push({ x: logX, z: logZ, radius: 1.2 });
+    }
   }
 
   private createDiscoverables() {
@@ -1744,9 +1896,18 @@ export class GameEngine {
       const mat = mesh.material as THREE.MeshLambertMaterial;
       if (mat.map) mat.map.offset.x = t * 0.055;
     }
-    for (const sheet of this.waterfallSheets) {
-      const mat = sheet.material as THREE.MeshBasicMaterial;
-      if (mat.map) mat.map.offset.y = -t * 0.7;
+  }
+
+  private updateWaterfall(delta: number, t: number) {
+    if (this.waterfallSystem) {
+      updateWaterfallSystem(
+        this.waterfallSystem,
+        delta,
+        t,
+        this.playerPosition,
+        this.underwater,
+        this.camera,
+      );
     }
   }
 
@@ -2826,6 +2987,7 @@ export class GameEngine {
   // Esto es especialmente importante en React StrictMode, que monta y desmonta
   // el motor dos veces durante el desarrollo.
   private readonly handleKeyDown = (e: KeyboardEvent) => {
+    this.waterfallSystem?.audio?.init();
     const k = e.key.toLowerCase();
     this.keys[k] = true;
     if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
@@ -2836,6 +2998,7 @@ export class GameEngine {
   };
 
   private readonly handleMouseDown = (e: MouseEvent) => {
+    this.waterfallSystem?.audio?.init();
     this.mouseDown = true;
     this.lastMouseX = e.clientX;
     this.lastMouseY = e.clientY;
@@ -2867,6 +3030,7 @@ export class GameEngine {
   };
 
   private readonly handleTouchStart = (e: TouchEvent) => {
+    this.waterfallSystem?.audio?.init();
     for (const t of Array.from(e.changedTouches)) {
       if (t.clientX < window.innerWidth / 2 && this.moveTouchId === null) {
         this.moveTouchId = t.identifier;
@@ -2968,6 +3132,7 @@ export class GameEngine {
         this.animateApples(this.elapsedTotal);
         this.updateButterflies(this.elapsedTotal);
         this.updateRiver(this.elapsedTotal);
+        this.updateWaterfall(delta, this.elapsedTotal);
         this.updateClouds(this.elapsedTotal);
         this.updateLilith(delta);
         this.rabbits?.update(delta, this.elapsedTotal, this.playerPosition.x, this.playerPosition.z);
@@ -2995,7 +3160,7 @@ export class GameEngine {
     // Seis planos encadenados que van del árbol al astro y terminan con los
     // dos en el mismo encuadre.
     const seg = (a: number, b: number) => ease(Math.min(Math.max((p - a) / (b - a), 0), 1));
-    const CANOPY = 7;          // copa del manzano
+    const CANOPY = 11.5;         // copa del manzano monumental
     const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
     // Punto al que mira la cámara: se desliza de la copa hacia la luz
     const aim = (k: number) => lerp(CANOPY, lightY, k);

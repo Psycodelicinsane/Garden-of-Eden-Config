@@ -198,7 +198,7 @@ export function isUnreachableHighland(x: number, z: number): boolean {
 /** Colinas laterales + meseta alta del nacedero. */
 export const MOUNTAIN_PEAKS: readonly MountainPeak[] = [
   { x: -560, z: -480, height: 24, radius: 180 },
-  { x: 820, z: 148, height: 168, radius: 175 },
+  { x: 820, z: 148, height: 68, radius: 175 },
 ] as const;
 
 export function mountainHeight(x: number, z: number): number {
@@ -227,19 +227,19 @@ export function isMountainCore(x: number, z: number): boolean {
 export const FOREST_TREE_COUNT = 540;
 export const BERRY_BUSH_COUNT = 150;
 
-/** Claro del Árbol, como el prado de la carta. */
+/** Claro del Árbol, como el prado de la carta (100 metros de radio). */
 export function isMeadow(x: number, z: number): boolean {
-  return Math.hypot(x, z) < 96;
+  return Math.hypot(x, z) < 100;
 }
 
 /** Pinar denso del suroeste (carta: abetos a la izquierda abajo). */
 export function isPineGrove(x: number, z: number): boolean {
-  return x < -70 && z < -110 && x > -720 && z > -700;
+  return (x < -36 && z < -40 && x > -780 && z > -780) || (x < -70 && z < -110 && x > -720 && z > -700);
 }
 
 /** Palmeras del sureste (carta: palmas a la derecha abajo). */
 export function isPalmGrove(x: number, z: number): boolean {
-  return x > 90 && z < -70 && x < 620 && z > -620;
+  return (x > 36 && z < -36 && x < 680 && z > -680) || (x > 90 && z < -70 && x < 620 && z > -620);
 }
 
 export function isFruitTreeIndex(index: number): boolean {

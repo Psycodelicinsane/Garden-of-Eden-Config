@@ -182,66 +182,221 @@ const PAPYRUS_MAP_BG: CSSProperties = {
   border: '3px solid #5a3a18',
 };
 
-function CornerVineGlyph({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
+function MedievalIlluminatedCorner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
   const place: CSSProperties = {
-    tl: { top: 2, left: 2, transform: 'none' },
-    tr: { top: 2, right: 2, transform: 'scaleX(-1)' },
-    bl: { bottom: 2, left: 2, transform: 'scaleY(-1)' },
-    br: { bottom: 2, right: 2, transform: 'scale(-1,-1)' },
+    tl: { top: 0, left: 0, transform: 'none' },
+    tr: { top: 0, right: 0, transform: 'scaleX(-1)' },
+    bl: { bottom: 0, left: 0, transform: 'scaleY(-1)' },
+    br: { bottom: 0, right: 0, transform: 'scale(-1,-1)' },
   }[pos];
-  const g = `vine-${pos}`;
+  const g = `gothic-${pos}`;
 
   return (
     <svg
       aria-hidden
-      viewBox="0 0 88 88"
+      viewBox="0 0 150 150"
       className="pointer-events-none"
       style={{
         position: 'absolute',
-        width: 76,
-        height: 76,
-        zIndex: 4,
-        filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9)) drop-shadow(0 0 6px rgba(255,200,90,0.28))',
+        width: 'clamp(95px, 13vw, 150px)',
+        height: 'clamp(95px, 13vw, 150px)',
+        zIndex: 5,
+        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.95)) drop-shadow(0 0 12px rgba(240,194,74,0.4))',
         ...place,
       }}
     >
       <defs>
+        {/* Gradiente de oro pulido medieval */}
         <linearGradient id={`${g}-gold`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#fff6c8" />
-          <stop offset="45%" stopColor="#f0c24a" />
-          <stop offset="100%" stopColor="#8a5610" />
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="20%" stopColor="#fff2b2" />
+          <stop offset="45%" stopColor="#f3c242" />
+          <stop offset="75%" stopColor="#c28816" />
+          <stop offset="100%" stopColor="#543006" />
         </linearGradient>
+        {/* Gradiente de oro profundo sombreado */}
+        <linearGradient id={`${g}-darkgold`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#ffd76a" />
+          <stop offset="50%" stopColor="#b67c13" />
+          <stop offset="100%" stopColor="#3d1e03" />
+        </linearGradient>
+        {/* Joya de rubí iluminado */}
+        <radialGradient id={`${g}-ruby`} cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#ff7b92" />
+          <stop offset="40%" stopColor="#e01238" />
+          <stop offset="85%" stopColor="#800418" />
+          <stop offset="100%" stopColor="#3a0008" />
+        </radialGradient>
+        {/* Joya de esmeralda iluminada */}
+        <radialGradient id={`${g}-emerald`} cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#7bf0ad" />
+          <stop offset="40%" stopColor="#1bb860" />
+          <stop offset="85%" stopColor="#0b582b" />
+          <stop offset="100%" stopColor="#032611" />
+        </radialGradient>
       </defs>
+
+      {/* ── 1. RAMA PRINCIPAL DE ACANTO HORIZONTAL (BORDE SUPERIOR) ── */}
       <path
-        d="M6 6 L72 6 C58 8 48 18 46 32 C44 48 28 58 8 56 L8 72"
+        d="M14 14 C40 10, 75 22, 105 12 C122 6, 136 14, 148 8"
         fill="none"
         stroke={`url(#${g}-gold)`}
-        strokeWidth="3.2"
+        strokeWidth="3.8"
         strokeLinecap="round"
       />
       <path
-        d="M14 14 L54 14 C46 16 40 24 38 34 C36 46 24 54 14 52 L14 54"
+        d="M16 16 C42 12, 74 24, 104 14 C120 8, 134 16, 146 10"
         fill="none"
-        stroke="#ffe08a"
-        strokeWidth="1.6"
+        stroke="#fff9db"
+        strokeWidth="1.4"
         strokeLinecap="round"
-        opacity="0.9"
+        opacity="0.85"
+      />
+      {/* Hojas de acanto superior lobuladas y dentadas */}
+      <path
+        d="M50 14 C42 2, 60 -2, 66 8 C72 -2, 88 4, 82 16 C92 10, 104 16, 98 26 C90 24, 82 22, 76 18 C68 24, 56 22, 50 14 Z"
+        fill={`url(#${g}-gold)`}
+        stroke="#2c1604"
+        strokeWidth="0.8"
       />
       <path
-        d="M28 28 C40 22 52 30 48 40 C44 50 30 50 28 40 C26 32 34 30 38 34 C40 36 38 40 34 40"
+        d="M95 12 C92 2, 108 0, 114 8 C120 0, 134 4, 130 14 C138 10, 146 16, 140 24 C132 20, 124 20, 118 16 C112 20, 102 18, 95 12 Z"
+        fill={`url(#${g}-darkgold)`}
+        stroke="#2c1604"
+        strokeWidth="0.8"
+      />
+      {/* Zarcillos y brotes de hiedra superior */}
+      <path d="M78 18 C86 28, 76 38, 66 34 C60 30, 64 22, 72 24" fill="none" stroke={`url(#${g}-gold)`} strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M120 16 C128 26, 120 34, 112 30" fill="none" stroke={`url(#${g}-gold)`} strokeWidth="1.8" strokeLinecap="round" />
+
+      {/* ── 2. RAMA PRINCIPAL DE ACANTO VERTICAL (BORDE LATERAL) ── */}
+      <path
+        d="M14 14 C10 40, 22 75, 12 105 C6 122, 14 136, 8 148"
         fill="none"
         stroke={`url(#${g}-gold)`}
-        strokeWidth="2.4"
+        strokeWidth="3.8"
         strokeLinecap="round"
       />
-      <path d="M20 10 C18 18 12 22 8 20" fill="none" stroke="#e8c050" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M10 22 C18 20 24 26 22 34" fill="none" stroke="#e8c050" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M52 10 C56 16 64 18 70 14" fill="none" stroke="#d4a428" strokeWidth="1.4" strokeLinecap="round" />
-      <path d="M10 50 C16 56 14 66 8 70" fill="none" stroke="#d4a428" strokeWidth="1.4" strokeLinecap="round" />
-      <path d="M16 16 C12 12 8 16 12 20 C16 18 18 16 16 16 Z" fill="#f0c24a" stroke="#3a2208" strokeWidth="0.5" />
-      <path d="M58 18 C64 14 68 22 62 24 C58 22 56 20 58 18 Z" fill="#c49220" stroke="#3a2208" strokeWidth="0.5" />
-      <path d="M18 48 C12 50 14 58 20 54 C22 50 20 48 18 48 Z" fill="#c49220" stroke="#3a2208" strokeWidth="0.5" />
-      <circle cx="36" cy="38" r="3.2" fill="#fff6c4" stroke="#6a4010" strokeWidth="0.8" />
+      <path
+        d="M16 16 C12 42, 24 74, 14 104 C8 120, 16 134, 10 146"
+        fill="none"
+        stroke="#fff9db"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      {/* Hojas de acanto lateral lobuladas y dentadas */}
+      <path
+        d="M14 50 C2 42, -2 60, 8 66 C-2 72, 4 88, 16 82 C10 92, 16 104, 26 98 C24 90, 22 82, 18 76 C24 68, 22 56, 14 50 Z"
+        fill={`url(#${g}-gold)`}
+        stroke="#2c1604"
+        strokeWidth="0.8"
+      />
+      <path
+        d="M12 95 C2 92, 0 108, 8 114 C0 120, 4 134, 14 130 C10 138, 16 146, 24 140 C20 132, 20 124, 16 118 C20 112, 18 102, 12 95 Z"
+        fill={`url(#${g}-darkgold)`}
+        stroke="#2c1604"
+        strokeWidth="0.8"
+      />
+      {/* Zarcillos y brotes de hiedra lateral */}
+      <path d="M18 78 C28 86, 38 76, 34 66 C30 60, 22 64, 24 72" fill="none" stroke={`url(#${g}-gold)`} strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M16 120 C26 128, 34 120, 30 112" fill="none" stroke={`url(#${g}-gold)`} strokeWidth="1.8" strokeLinecap="round" />
+
+      {/* ── 3. VOLUTA DIAGONAL INTERIOR CON ROSAS Y FLORES MEDIEVALES ── */}
+      <path
+        d="M26 26 C46 38, 62 58, 54 78 C48 92, 32 86, 36 72 C40 60, 56 66, 50 76"
+        fill="none"
+        stroke={`url(#${g}-gold)`}
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M26 26 C38 46, 58 62, 78 54 C92 48, 86 32, 72 36 C60 40, 66 56, 76 50"
+        fill="none"
+        stroke={`url(#${g}-gold)`}
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+
+      {/* Hojas de hiedra dorada y tréboles */}
+      <path d="M62 38 C68 28, 80 32, 76 42 C72 48, 64 44, 62 38 Z" fill={`url(#${g}-gold)`} stroke="#2c1604" strokeWidth="0.6" />
+      <path d="M38 62 C28 68, 32 80, 42 76 C48 72, 44 64, 38 62 Z" fill={`url(#${g}-gold)`} stroke="#2c1604" strokeWidth="0.6" />
+      <path d="M84 46 C92 40, 98 50, 92 56 C86 60, 80 52, 84 46 Z" fill={`url(#${g}-darkgold)`} stroke="#2c1604" strokeWidth="0.6" />
+      <path d="M46 84 C40 92, 50 98, 56 92 C60 86, 52 80, 46 84 Z" fill={`url(#${g}-darkgold)`} stroke="#2c1604" strokeWidth="0.6" />
+
+      {/* ── 4. FLORÓN CENTRAL HERALDICO Y FLOR DE LIS DE LA ESQUINA ── */}
+      {/* Pétalo central de la flor de lis */}
+      <path
+        d="M24 6 C18 18, 16 30, 24 40 C32 30, 30 18, 24 6 Z"
+        fill={`url(#${g}-gold)`}
+        stroke="#2c1604"
+        strokeWidth="0.9"
+      />
+      {/* Pétalo izquierdo curvado */}
+      <path
+        d="M18 28 C8 24, 2 34, 8 42 C16 46, 22 38, 22 32 Z"
+        fill={`url(#${g}-gold)`}
+        stroke="#2c1604"
+        strokeWidth="0.9"
+      />
+      {/* Pétalo derecho curvado */}
+      <path
+        d="M28 18 C24 8, 34 2, 42 8 C46 16, 38 22, 32 22 Z"
+        fill={`url(#${g}-gold)`}
+        stroke="#2c1604"
+        strokeWidth="0.9"
+      />
+      {/* Anillo de unión de la flor de lis */}
+      <path
+        d="M12 36 Q26 42 40 32 L36 38 Q24 46 10 40 Z"
+        fill={`url(#${g}-darkgold)`}
+        stroke="#2c1604"
+        strokeWidth="0.8"
+      />
+      {/* Base de la flor de lis */}
+      <path
+        d="M18 40 C14 50, 22 56, 26 60 C30 56, 38 48, 34 38 Z"
+        fill={`url(#${g}-gold)`}
+        stroke="#2c1604"
+        strokeWidth="0.8"
+      />
+
+      {/* ── 5. JOYAS Y PERLAS GÓTICAS ENCAST次第AS ── */}
+      {/* Gran rubí central en la flor de lis */}
+      <circle cx="25" cy="31" r="4.2" fill={`url(#${g}-ruby)`} stroke="#ffd700" strokeWidth="0.9" />
+      <circle cx="23.5" cy="29.5" r="1.2" fill="#ffffff" opacity="0.8" />
+
+      {/* Esmeraldas y rubíes en los nudos del acanto */}
+      <circle cx="68" cy="17" r="3.2" fill={`url(#${g}-emerald)`} stroke="#ffd700" strokeWidth="0.7" />
+      <circle cx="17" cy="68" r="3.2" fill={`url(#${g}-emerald)`} stroke="#ffd700" strokeWidth="0.7" />
+      <circle cx="114" cy="11" r="2.8" fill={`url(#${g}-ruby)`} stroke="#ffd700" strokeWidth="0.6" />
+      <circle cx="11" cy="114" r="2.8" fill={`url(#${g}-ruby)`} stroke="#ffd700" strokeWidth="0.6" />
+
+      {/* Roseta de cinco pétalos iluminada en la voluta interior */}
+      <g transform="translate(56, 56)">
+        {[0, 72, 144, 216, 288].map((deg) => (
+          <ellipse
+            key={deg}
+            cx="0"
+            cy="-5.2"
+            rx="2.6"
+            ry="4.2"
+            transform={`rotate(${deg})`}
+            fill={`url(#${g}-gold)`}
+            stroke="#2c1604"
+            strokeWidth="0.5"
+          />
+        ))}
+        <circle cx="0" cy="0" r="3.0" fill={`url(#${g}-ruby)`} stroke="#ffd700" strokeWidth="0.6" />
+        <circle cx="-0.8" cy="-0.8" r="0.9" fill="#ffffff" opacity="0.85" />
+      </g>
+
+      {/* Perlas doradas de remate */}
+      {[
+        [90, 30], [30, 90], [136, 22], [22, 136], [74, 52], [52, 74]
+      ].map(([px, py], i) => (
+        <circle key={i} cx={px} cy={py} r="2.2" fill="#fff7d1" stroke="#8a5a12" strokeWidth="0.6" />
+      ))}
     </svg>
   );
 }
@@ -304,10 +459,10 @@ function ClassicFrame() {
         `,
       }}
     >
-      <CornerVineGlyph pos="tl" />
-      <CornerVineGlyph pos="tr" />
-      <CornerVineGlyph pos="bl" />
-      <CornerVineGlyph pos="br" />
+      <MedievalIlluminatedCorner pos="tl" />
+      <MedievalIlluminatedCorner pos="tr" />
+      <MedievalIlluminatedCorner pos="bl" />
+      <MedievalIlluminatedCorner pos="br" />
     </div>
   );
 }
@@ -323,48 +478,93 @@ function readRegistry(): Registry {
 
 function DecoratedLetterG() {
   return (
-    <span className="relative inline-flex items-baseline shrink-0 select-none mr-0.5 align-baseline">
+    <span className="relative inline-flex items-baseline shrink-0 select-none mr-1 align-baseline">
       <svg
-        viewBox="0 0 100 115"
-        className="w-[1.15em] h-[1.15em] inline-block align-baseline -mb-[0.14em]"
+        viewBox="0 0 110 125"
+        className="w-[1.25em] h-[1.25em] inline-block align-baseline -mb-[0.16em]"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         style={{
-          filter: 'drop-shadow(0 2px 1px rgba(40,24,2,0.85)) drop-shadow(0 0 16px rgba(255,195,80,0.4))',
+          filter: 'drop-shadow(0 3px 2px rgba(40,20,4,0.95)) drop-shadow(0 0 16px rgba(255,200,80,0.5))',
         }}
       >
         <defs>
-          <linearGradient id="goldDecorG_v8" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#fffbe6" />
-            <stop offset="25%" stopColor="#ffe9a8" />
-            <stop offset="50%" stopColor="#f5c34a" />
-            <stop offset="80%" stopColor="#d99a1f" />
-            <stop offset="100%" stopColor="#a8740e" />
+          <linearGradient id="gothicGoldG" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="18%" stopColor="#fff4b5" />
+            <stop offset="45%" stopColor="#f5c242" />
+            <stop offset="78%" stopColor="#c48814" />
+            <stop offset="100%" stopColor="#4e2b03" />
           </linearGradient>
+          <linearGradient id="gothicDarkGoldG" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#ffd96a" />
+            <stop offset="55%" stopColor="#b57a10" />
+            <stop offset="100%" stopColor="#3d1b02" />
+          </linearGradient>
+          <radialGradient id="rubyG" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#ff7b92" />
+            <stop offset="45%" stopColor="#dc143c" />
+            <stop offset="90%" stopColor="#7a0416" />
+            <stop offset="100%" stopColor="#350006" />
+          </radialGradient>
         </defs>
+
+        {/* ── VOLUTAS Y ZARCILLOS EXTERIORES DE ACANTO ── */}
         <path
-          d="M18,52 C8,24 38,6 64,8 C80,10 92,24 88,38 C84,50 72,54 62,48 C52,42 48,28 58,20 C66,14 78,18 74,28"
-          stroke="#ffd875"
-          strokeWidth="2.5"
+          d="M18 60 C4 28, 32 8, 62 10 C82 12, 98 26, 94 44 C90 56, 76 60, 64 54 C52 48, 48 30, 60 22 C70 14, 82 18, 78 30"
+          fill="none"
+          stroke="url(#gothicGoldG)"
+          strokeWidth="2.6"
           strokeLinecap="round"
         />
         <path
-          d="M52,90 C26,98 10,78 14,50 C18,28 36,14 60,14"
-          stroke="#ffd875"
+          d="M56 102 C28 110, 8 88, 12 56 C16 32, 36 16, 64 16 C84 16, 98 28, 104 42"
+          fill="none"
+          stroke="url(#gothicGoldG)"
           strokeWidth="2.2"
           strokeLinecap="round"
         />
-        <circle cx="28" cy="24" r="5" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.5" />
-        <circle cx="78" cy="82" r="5" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.5" />
-        <circle cx="16" cy="74" r="4" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.2" />
+
+        {/* Hojas de acanto y brotes de hiedra */}
+        <path d="M28 22 C20 12, 34 8, 40 18 C36 24, 28 24, 28 22 Z" fill="url(#gothicGoldG)" stroke="#2c1604" strokeWidth="0.6" />
+        <path d="M86 28 C96 20, 102 32, 94 38 C88 38, 84 32, 86 28 Z" fill="url(#gothicGoldG)" stroke="#2c1604" strokeWidth="0.6" />
+        <path d="M84 92 C96 90, 102 102, 92 108 C84 106, 82 98, 84 92 Z" fill="url(#gothicGoldG)" stroke="#2c1604" strokeWidth="0.6" />
+        <path d="M20 84 C10 88, 12 100, 22 96 C26 90, 24 84, 20 84 Z" fill="url(#gothicDarkGoldG)" stroke="#2c1604" strokeWidth="0.6" />
+
+        {/* ── CUERPO PRINCIPAL DE LA G LOMBARDICA / GÓTICA ILUMINADA ── */}
         <path
-          d="M86,36 C82,24 72,16 54,16 C32,16 16,34 16,60 C16,84 32,100 58,100 C78,100 90,88 90,68 L56,68 L56,54 L98,54 L98,72 C98,96 78,108 54,108 C26,108 6,86 6,60 C6,30 26,6 56,6 C78,6 92,15 98,28 Z"
-          fill="url(#goldDecorG_v8)"
-          stroke="rgba(58,36,4,0.75)"
-          strokeWidth="2"
+          d="
+            M 92,34
+            C 86,20 74,12 56,12
+            C 28,12 10,34 10,64
+            C 10,92 28,112 58,112
+            C 82,112 98,98 100,74
+            L 100,58
+            L 58,58
+            L 58,70
+            L 86,70
+            C 84,86 74,98 58,98
+            C 38,98 24,84 24,64
+            C 24,42 38,26 56,26
+            C 70,26 80,32 86,42
+            Z
+          "
+          fill="url(#gothicGoldG)"
+          stroke="#2c1604"
+          strokeWidth="2.2"
         />
-        <polygon points="56,6 61,0 66,6 61,12" fill="#fffbe6" stroke="#4a2a06" strokeWidth="1" />
-        <circle cx="77" cy="61" r="3.5" fill="#fffbe6" stroke="#4a2a06" strokeWidth="1" />
+
+        {/* Remate superior con florón gótico */}
+        <path d="M86 36 L100 24 L104 36 L94 44 Z" fill="url(#gothicDarkGoldG)" stroke="#2c1604" strokeWidth="1.2" />
+        {/* Espolón y remate del travesaño */}
+        <path d="M96 56 L106 58 L104 74 L96 72 Z" fill="url(#gothicDarkGoldG)" stroke="#2c1604" strokeWidth="1.2" />
+
+        {/* ── JOYAS ENCAST次第AS Y PERLAS ── */}
+        <circle cx="58" cy="64" r="3.8" fill="url(#rubyG)" stroke="#ffd700" strokeWidth="0.8" />
+        <circle cx="56.8" cy="62.8" r="1.1" fill="#ffffff" opacity="0.85" />
+        <circle cx="100" cy="24" r="2.6" fill="#fff7d1" stroke="#8a5a12" strokeWidth="0.6" />
+        <circle cx="104" cy="74" r="2.6" fill="#fff7d1" stroke="#8a5a12" strokeWidth="0.6" />
+        <circle cx="16" cy="64" r="3.0" fill="url(#rubyG)" stroke="#ffd700" strokeWidth="0.7" />
       </svg>
     </span>
   );
@@ -372,67 +572,97 @@ function DecoratedLetterG() {
 
 function DecoratedLetterE() {
   return (
-    <span className="relative inline-flex items-baseline shrink-0 select-none mr-0.5 align-baseline">
+    <span className="relative inline-flex items-baseline shrink-0 select-none mr-1 align-baseline">
       <svg
-        viewBox="0 0 100 115"
-        className="w-[1.15em] h-[1.15em] inline-block align-baseline -mb-[0.14em]"
+        viewBox="0 0 110 125"
+        className="w-[1.25em] h-[1.25em] inline-block align-baseline -mb-[0.16em]"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         style={{
-          filter: 'drop-shadow(0 2px 1px rgba(40,24,2,0.85)) drop-shadow(0 0 16px rgba(255,195,80,0.4))',
+          filter: 'drop-shadow(0 3px 2px rgba(40,20,4,0.95)) drop-shadow(0 0 16px rgba(255,200,80,0.5))',
         }}
       >
         <defs>
-          <linearGradient id="goldDecorE_v8" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#fffbe6" />
-            <stop offset="25%" stopColor="#ffe9a8" />
-            <stop offset="50%" stopColor="#f5c34a" />
-            <stop offset="80%" stopColor="#d99a1f" />
-            <stop offset="100%" stopColor="#a8740e" />
+          <linearGradient id="gothicGoldE" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="18%" stopColor="#fff4b5" />
+            <stop offset="45%" stopColor="#f5c242" />
+            <stop offset="78%" stopColor="#c48814" />
+            <stop offset="100%" stopColor="#4e2b03" />
           </linearGradient>
+          <linearGradient id="gothicDarkGoldE" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#ffd96a" />
+            <stop offset="55%" stopColor="#b57a10" />
+            <stop offset="100%" stopColor="#3d1b02" />
+          </linearGradient>
+          <radialGradient id="emeraldE" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#7bf0ad" />
+            <stop offset="45%" stopColor="#1bb860" />
+            <stop offset="90%" stopColor="#0b582b" />
+            <stop offset="100%" stopColor="#032611" />
+          </radialGradient>
         </defs>
+
+        {/* ── VOLUTAS Y ZARCILLOS EXTERIORES DE ACANTO ── */}
         <path
-          d="M18,48 C8,22 36,4 62,6 C78,8 90,20 86,36 C82,48 70,52 60,46 C50,40 46,26 56,18 C64,12 76,16 72,26"
-          stroke="#ffd875"
-          strokeWidth="2.5"
+          d="M18 58 C4 26, 32 6, 62 8 C80 10, 96 22, 92 40 C88 52, 74 56, 62 50 C50 44, 46 28, 58 20 C68 12, 80 16, 76 28"
+          fill="none"
+          stroke="url(#gothicGoldE)"
+          strokeWidth="2.6"
           strokeLinecap="round"
         />
         <path
-          d="M50,86 C24,94 8,76 12,50 C16,28 34,14 58,14"
-          stroke="#ffd875"
+          d="M54 100 C26 108, 8 86, 12 56 C16 32, 34 16, 62 16 C82 16, 96 26, 102 38"
+          fill="none"
+          stroke="url(#gothicGoldE)"
           strokeWidth="2.2"
           strokeLinecap="round"
         />
-        <circle cx="26" cy="22" r="5" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.5" />
-        <circle cx="78" cy="82" r="5" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.5" />
-        <circle cx="16" cy="74" r="4" fill="#f5c34a" stroke="#4a2a06" strokeWidth="1.2" />
+
+        {/* Hojas de acanto y brotes */}
+        <path d="M26 20 C18 10, 32 6, 38 16 C34 22, 26 22, 26 20 Z" fill="url(#gothicGoldE)" stroke="#2c1604" strokeWidth="0.6" />
+        <path d="M84 26 C94 18, 100 30, 92 36 C86 36, 82 30, 84 26 Z" fill="url(#gothicGoldE)" stroke="#2c1604" strokeWidth="0.6" />
+        <path d="M88 88 C98 84, 104 96, 94 102 C86 100, 84 92, 88 88 Z" fill="url(#gothicGoldE)" stroke="#2c1604" strokeWidth="0.6" />
+        <path d="M18 82 C8 86, 10 98, 20 94 C24 88, 22 82, 18 82 Z" fill="url(#gothicDarkGoldE)" stroke="#2c1604" strokeWidth="0.6" />
+
+        {/* ── CUERPO PRINCIPAL DE LA E LOMBARDICA / UNCIAL ILUMINADA ── */}
         <path
           d="
-            M 84,28
-            C 76,16 62,12 46,12
-            C 24,12 8,30 8,58
-            C 8,86 24,104 48,104
-            C 66,104 80,96 88,80
-            L 74,74
-            C 68,86 58,92 46,92
-            C 30,92 20,78 20,58
-            C 20,38 30,24 46,24
-            C 58,24 68,30 74,38
+            M 92,26
+            C 84,14 70,10 52,10
+            C 26,10 8,30 8,62
+            C 8,90 26,110 54,110
+            C 72,110 86,102 94,86
+            L 80,80
+            C 74,92 64,98 52,98
+            C 34,98 22,82 22,62
+            C 22,40 34,24 52,24
+            C 64,24 74,30 80,40
             Z
           "
-          fill="url(#goldDecorE_v8)"
-          stroke="rgba(58,36,4,0.75)"
-          strokeWidth="2"
+          fill="url(#gothicGoldE)"
+          stroke="#2c1604"
+          strokeWidth="2.2"
         />
+
+        {/* Brazo central de la E con remate de florón */}
         <path
-          d="M 18,52 L 68,52 C 74,48 84,52 88,58 C 84,64 74,68 68,64 L 18,64 Z"
-          fill="url(#goldDecorE_v8)"
-          stroke="rgba(58,36,4,0.75)"
+          d="M 20,56 L 68,56 C 76,50 88,54 92,62 C 88,70 76,74 68,68 L 20,68 Z"
+          fill="url(#gothicGoldE)"
+          stroke="#2c1604"
           strokeWidth="1.8"
         />
-        <polygon points="84,28 89,20 94,28 89,34" fill="#fffbe6" stroke="#4a2a06" strokeWidth="1" />
-        <circle cx="78" cy="58" r="3.2" fill="#fffbe6" stroke="#4a2a06" strokeWidth="1" />
-        <polygon points="88,80 93,72 98,80 93,86" fill="#fffbe6" stroke="#4a2a06" strokeWidth="1" />
+
+        {/* Remates trilobulados de los brazos superior e inferior */}
+        <path d="M88 24 L100 16 L102 28 L94 34 Z" fill="url(#gothicDarkGoldE)" stroke="#2c1604" strokeWidth="1.2" />
+        <path d="M90 88 L102 96 L98 106 L88 98 Z" fill="url(#gothicDarkGoldE)" stroke="#2c1604" strokeWidth="1.2" />
+
+        {/* ── JOYAS ENCAST次第AS Y PERLAS ── */}
+        <circle cx="78" cy="62" r="3.8" fill="url(#emeraldE)" stroke="#ffd700" strokeWidth="0.8" />
+        <circle cx="76.8" cy="60.8" r="1.1" fill="#ffffff" opacity="0.85" />
+        <circle cx="100" cy="16" r="2.6" fill="#fff7d1" stroke="#8a5a12" strokeWidth="0.6" />
+        <circle cx="100" cy="104" r="2.6" fill="#fff7d1" stroke="#8a5a12" strokeWidth="0.6" />
+        <circle cx="15" cy="62" r="3.0" fill="url(#emeraldE)" stroke="#ffd700" strokeWidth="0.7" />
       </svg>
     </span>
   );

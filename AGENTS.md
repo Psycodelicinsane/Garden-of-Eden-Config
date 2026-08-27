@@ -26,7 +26,8 @@ Si hace falta mencionar esa etapa, dilo así: *prototipos locales previos a 2.1;
 | 1 | **2.1.0** | tag `v2.1.0`, rama `release/v2.1.0` |
 | 2 | **2.3.0** | tag `v2.3.0`, rama `release/v2.3.0` |
 | 3 | **3.0.0** | tag `v3.0.0`, rama `release/v3.0.0` |
-| 4 | **3.1.0** | tag `v3.1.0` (actual) |
+| 4 | **3.1.0** | tag `v3.1.0`, rama `release/v3.1.0` |
+| 5 | **3.2.0** | tag `v3.2.0` (actual) |
 
 Catálogo: [VERSIONS.md](VERSIONS.md) · notas: [CHANGELOG.md](CHANGELOG.md) · releases: https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases
 
@@ -56,8 +57,10 @@ No uses ramas de sesión como archivo histórico. No reescribas `release/*`.
 
 ## 5. Cómo trabajar
 
+- **Todo cambio aporta algo y siempre es para mejorar el proyecto.**
+- **Honestidad y rigor técnico**: Si no hacemos algo decimos con claridad que **está por hacer** y se hace más tarde; **nunca se dice que se ha hecho un cambio sin haberlo implementado de verdad**.
 - Lee también [README.md](README.md).
-- Parte de la versión actual (`3.0.0`), no de prototipos locales.
+- Parte de la versión actual (`3.2.0`), no de prototipos locales.
 - Cambios pequeños y verificables. Antes de un PR: `npm ci && npm run check`.
 - Preview: `npm run dev -- --host 0.0.0.0` (Vite ya permite cualquier host).
 - No subas `dist/`, `node_modules/` ni secretos.
@@ -91,6 +94,8 @@ Este proyecto es un **juego de aventura visual** inspirado en el Jardín del Ed�
 
 ### Cómo deben trabajar los modelos
 
+- **Todo cambio aporta algo y siempre es para mejorar el proyecto.**
+- **Honestidad ante todo**: Si algo no se hace o queda pendiente, se dice con total transparencia que **está por hacer** y se realiza más tarde. **Nunca** se afirma haber realizado un cambio sin haberlo implementado y verificado en el código.
 - No conviertas esto en un tutorial ni en un HUD que lo explique todo.
 - Prioriza atmósfera, descubrimiento y consecuencias silenciosas.
 - Conserva la estética PS2, el tono del jardín y el crédito **PSYCODELICINSANE**.

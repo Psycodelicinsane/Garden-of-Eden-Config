@@ -49,10 +49,6 @@ export default function HUD({
     setIsTouchDevice(hasTouch && !isFinePointer);
   }, []);
 
-  const distToTree = useMemo(() => {
-    return Math.floor(Math.sqrt(playerPos.x * playerPos.x + playerPos.z * playerPos.z));
-  }, [playerPos.x, playerPos.z]);
-
   const treeRelAngle = useMemo(() => {
     const treeBearing = bearingToPoint(playerPos.x, playerPos.z, 0, 0);
     return shortestAngleDiff(compassHeading, treeBearing);
@@ -184,7 +180,7 @@ export default function HUD({
                     transform: 'translate(-50%, -50%)',
                     filter: 'drop-shadow(0 0 6px rgba(110, 231, 183, 0.95))',
                   }}
-                  title={`Árbol del Conocimiento (${distToTree}m)`}
+                  title="Árbol del Conocimiento"
                 >
                   🌳
                 </div>
@@ -199,13 +195,6 @@ export default function HUD({
                 boxShadow: '0 0 6px #ffd166, 0 1px 3px rgba(0,0,0,0.9)',
               }}
             />
-
-            <span
-              className="text-[9px] font-serif tracking-[0.25em] text-amber-200/85 uppercase mt-0.5"
-              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.8)' }}
-            >
-              Árbol Central: {distToTree}m
-            </span>
           </div>
         )}
 
