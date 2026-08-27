@@ -8,7 +8,8 @@ Entregas publicadas: [Releases](https://github.com/Psycodelicinsane/Garden-of-Ed
 
 | # | Versión | Fecha | Release | Rama | Commit | Cómo abrirla |
 |---|---|---|---|---|---|---|
-| 4 | **3.1.0** (actual) | 2026-08-25 | [v3.1.0](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v3.1.0) | `arena/01a02f89-garden-of-eden-config` | (tag `v3.1.0`) | `git checkout v3.1.0` |
+| 5 | **3.2.0** (actual) | 2026-08-25 | [v3.2.0](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v3.2.0) | `release/v3.2.0` | (tag `v3.2.0`) | `git checkout v3.2.0` |
+| 4 | **3.1.0** | 2026-08-25 | [v3.1.0](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v3.1.0) | `release/v3.1.0` | `2657e93` | `git checkout v3.1.0` |
 | 3 | **3.0.0** | 2026-08-23 | [v3.0.0](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v3.0.0) | `release/v3.0.0` | `649f751` | `git checkout v3.0.0` |
 | 2 | **2.3.0** | 2026-08-22 | [v2.3.0](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v2.3.0) | `release/v2.3.0` | `6b451cc` | `git checkout v2.3.0` |
 | 1 | **2.1.0** | 2026-08-21 | [v2.1.0](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v2.1.0) | `release/v2.1.0` | `2c02bda` | `git checkout v2.1.0` |

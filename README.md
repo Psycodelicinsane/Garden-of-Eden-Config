@@ -3,7 +3,7 @@
 > **Modelos y agentes: leed [AGENTS.md](AGENTS.md) antes de tocar el juego.**  
 > Lo anterior a la **2.1.0** se hizo en local y **no se recopiló**. La colección empieza en `v2.1.0`.
 
-![Versión](https://img.shields.io/badge/versión-3.1.0-d4a72c)
+![Versión](https://img.shields.io/badge/versión-3.2.0-d4a72c)
 ![React](https://img.shields.io/badge/React-19-61dafb)
 ![Three.js](https://img.shields.io/badge/Three.js-0.185-black)
 
@@ -15,8 +15,8 @@
 
 ## Estado del proyecto
 
-- **Versión actual:** `3.1.0`
-- **Siguiente:** `3.2.0`
+- **Versión actual:** `3.2.0`
+- **Siguiente:** `3.3.0`
 - **Plataformas:** navegador de escritorio y dispositivos táctiles
 - **Persistencia:** `localStorage` del navegador
 - **Build:** aplicación estática con JavaScript y CSS integrados en `dist/index.html`, más los recursos de `dist/images/`
@@ -27,8 +27,9 @@ Colección completa en [Releases](https://github.com/Psycodelicinsane/Garden-of-
 
 | Versión | Rama estable | Tag / release | Notas |
 |---|---|---|---|
-| **3.1.0** | tag `v3.1.0` | [`v3.1.0`](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v3.1.0) | Cascada alta, cuatro ríos, brújula, mapa carta, vuelo admin |
-| **3.0.0** | `main`, `release/v3.0.0` | [`v3.0.0`](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v3.0.0) | Portada iluminada, códice/mapa, HUD, ríos sagrados, Lilith |
+| **3.2.0** | tag `v3.2.0` | [`v3.2.0`](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v3.2.0) | Cascada realista PS2, cortinas 3D curvas, poza turquesa, niebla/partículas, arcoíris, audio procedural 3D |
+| **3.1.0** | `release/v3.1.0` | [`v3.1.0`](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v3.1.0) | Cascada alta, cuatro ríos, brújula, mapa carta, vuelo admin |
+| **3.0.0** | `release/v3.0.0` | [`v3.0.0`](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v3.0.0) | Portada iluminada, códice/mapa, HUD, ríos sagrados, Lilith |
 | **2.3.0** | `release/v2.3.0` | [`v2.3.0`](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v2.3.0) | Mundo 3D, mapa ilustrado, frutos, cinemáticas, controles táctiles |
 | **2.1.0** | `release/v2.1.0` | [`v2.1.0`](https://github.com/Psycodelicinsane/Garden-of-Eden-Config/releases/tag/v2.1.0) | Primera entrega jugable del jardín |
 
@@ -38,21 +39,28 @@ Convención:
 - `release/vX.Y.Z` — instantánea de esa versión.
 - `arena/…` — ramas de trabajo de sesión; no son versiones.
 
-## Características (v3.0.0)
+## Características (v3.2.0)
 
 - Mundo 3D generado con Three.js.
-- Río al norte del claro, con meandros, cauce, orillas y corriente.
-- Bosque de 300 árboles en el cinturón exterior, 100 frutales y 90 arbustos de bayas.
+- **Cascada del Nacedero renovada estilo PS2:**
+  - Cortinas 3D con curvatura parabólica de caída natural y capas de torrente azul profundo, cataratas de espuma blanca y velo de vapor translúcido.
+  - Embocadura curva en la cresta del risco y cascadas escalonadas secundarias (cintas norte/sur y estantes de roca).
+  - Anfiteatro de cañón rocoso con piedras mojadas brillantes, cornisas de musgo, lianas colgantes y gruta transitable detrás de la cortina.
+  - Poza de impacto turquesa con remolinos de espuma blanca giratorios, ondas concéntricas animadas y rápidos de salida al río.
+  - Sistema de partículas con 50 bocanadas volumétricas de niebla ascendente y 42 gotas de salpicadura balísticas.
+  - Arcoíris espectral suspendido en la niebla que destella suavemente con la luz del sol.
+  - Audio procedural 3D con Web Audio API: rugido imponente con atenuación por distancia y filtro subacuático ahogado al sumergirse.
+- Río al norte del claro con cuatro brazos sagrados al este (Pisón, Gijón, Hidekel, Éufrates).
+- Bosque de árboles en el cinturón exterior, frutales recolectables y arbustos de bayas.
 - Montañas transitables al oeste, suroeste y sureste.
-- Árbol del Conocimiento con interacciones y cinemática.
+- Árbol del Conocimiento con interacciones y cinemática celestial.
 - Lilith con animación, diálogo, colisiones y espacio personal.
 - Intro multicolor de PSYCODELICINSANE.
 - Portada con letras iluminadas, marco dorado y navegación `INICIO / RECUERDOS / DATOS / MAPA`.
 - Códice cartográfico con hitos y citas del Génesis.
 - HUD: mira, brújula, saciedad (`SAC`) y Score.
-- Sistema de score, recuerdos, estadísticas y descubrimientos.
-- Conejos low-poly estilo PS2 repartidos por el jardín: pastorean, saltan y huyen.
-- Controles de teclado, ratón y pantallas táctiles.
+- Conejos low-poly estilo PS2 repartidos por el jardín.
+- Controles de escritorio y táctiles.
 
 ## Requisitos
 

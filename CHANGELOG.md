@@ -2,6 +2,20 @@
 
 Los prototipos **anteriores a 2.1.0** se hicieron en local y no forman parte de esta colección. Ver [AGENTS.md](AGENTS.md).
 
+## 3.2.0 — 2026-08-25
+
+Publicada como tag `v3.2.0`.
+
+- Cascada del Nacedero completamente rediseñada con estética PS2 realista e impresionante.
+- Cortinas 3D con curvatura parabólica paramétrica (caída acelerada por gravedad) y multicapa: torrente azul zafiro, cataratas de espuma blanca hirviente y velo etéreo de vapor translúcido.
+- Embocadura curva en la cresta del risco (spillway) y cascadas escalonadas secundarias que rompen en estantes de roca y cornisas intermedias.
+- Cascadas laterales gemelas (cintas norte y sur) que caen por hendiduras rocosas naturales.
+- Anfiteatro y cañón de roca con texturas de piedra mojada brillante, musgo verde terciopelo, enredaderas colgantes y gruta transitable detrás de la cortina de agua.
+- Poza de impacto turquesa con remolinos de espuma blanca giratorios, ondas concéntricas animadas y rápidos de salida al río principal.
+- Sistema de partículas con 50 bocanadas volumétricas de niebla ascendente y 42 gotas de salpicadura balísticas que saltan del agua.
+- Arcoíris espectral suspendido en la niebla que destella con la luz del sol del Edén.
+- Audio procedural 3D con Web Audio API: rugido imponente de agua con atenuación espacial por distancia y filtro subacuático ahogado al sumergirse.
+
 ## 3.1.0 — 2026-08-25
 
 Publicada como tag `v3.1.0`.
